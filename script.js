@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const transcriptionArea = document.getElementById('transcriptionArea');
     const micBtn = document.getElementById('micBtn');
     const copyBtn = document.getElementById('copyBtn');
+    const clearBtn = document.getElementById('clearBtn'); // Seleciona o novo botão
 
     // Verifica se o navegador suporta a Web Speech API
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -12,9 +13,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const recognition = new SpeechRecognition();
-    recognition.lang = 'pt-BR'; // Define o idioma
-    recognition.interimResults = true; // Mostra resultados parciais
-    recognition.continuous = true; // Continua escutando
+    recognition.lang = 'pt-BR';
+    recognition.interimResults = true;
+    recognition.continuous = true;
 
     let isRecording = false;
     let finalTranscript = '';
@@ -23,7 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     micBtn.addEventListener('click', () => {
         isRecording = !isRecording;
         if (isRecording) {
-            finalTranscript = transcriptionArea.value; // Continua do texto existente
+            finalTranscript = transcriptionArea.value;
             recognition.start();
             micBtn.classList.add('recording');
             micBtn.querySelector('span').textContent = 'Parar';
@@ -63,12 +64,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     copyBtn.textContent = 'Copiado!';
                     setTimeout(() => {
                         copyBtn.textContent = originalText;
-                    }, 2000); // Volta ao normal após 2 segundos
+                    }, 2000);
                 })
                 .catch(err => {
                     console.error('Falha ao copiar texto: ', err);
                     alert('Não foi possível copiar o texto.');
                 });
         }
+    });
+
+    // Lógica para o novo botão de apagar
+    clearBtn.addEventListener('click', () => {
+        transcriptionArea.value = ''; // Limpa o conteúdo
+        transcriptionArea.focus();    // Coloca o cursor de volta na área de texto
     });
 });
