@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lançador - Ditado Digital</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎤</text></svg>">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -15,7 +16,8 @@
 
     <script>
         document.getElementById('openAppBtn').addEventListener('click', () => {
-            const windowFeatures = 'width=500,height=450,popup=yes';
+            // Tamanho da janela aumentado em 10% (de 500x450 para 550x495)
+            const windowFeatures = 'width=550,height=495,popup=yes';
             window.open('app.html', 'transcriptionApp', windowFeatures);
         });
     </script>
