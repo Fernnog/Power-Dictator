@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transcrição Rápida</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Ditado Digital</h1>
+        <p>Clique no microfone para começar a falar.</p>
+        <textarea id="transcriptionArea" rows="10" placeholder="Seu texto aparecerá aqui..."></textarea>
+        <div class="button-group">
+            <button id="micBtn">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
+                <span>Gravar</span>
+            </button>
+            <button id="copyBtn">Copiar Texto</button>
+        </div>
+    </div>
+    <script src="script.js" defer></script>
+</body>
+</html>
