@@ -64,7 +64,6 @@ body {
     background-color: #ffffff;
     padding: 2rem 2.5rem;
     border-radius: 12px;
-    /* A sombra não é tão necessária na pop-up, mas pode ser mantida */
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
     text-align: center;
     width: 100%;
@@ -92,7 +91,7 @@ body {
     font-size: 1rem;
     line-height: 1.5;
     resize: vertical;
-    box-sizing: border-box; /* Garante que padding não afete a largura total */
+    box-sizing: border-box;
 }
 
 /* Grupo de botões da ferramenta */
@@ -127,7 +126,7 @@ body {
 }
 
 #micBtn.recording {
-    background-color: #dc3545; /* Vermelho para indicar gravação */
+    background-color: #dc3545;
 }
 
 #micBtn:hover {
@@ -146,4 +145,14 @@ body {
 
 #copyBtn:hover {
     background-color: #0069d9;
+}
+
+/* Estilo para o novo botão de apagar */
+#clearBtn {
+    background-color: #6c757d;
+    color: white;
+}
+
+#clearBtn:hover {
+    background-color: #5a6268;
 }
