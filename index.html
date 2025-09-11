@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lançador - Ditado Digital</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="launcher-container">
+        <h1>Ditado Digital</h1>
+        <p>Clique no botão abaixo para abrir a ferramenta de transcrição em uma janela compacta.</p>
+        <button id="openAppBtn" class="launcher-button">Abrir Ferramenta</button>
+    </div>
+
+    <script>
+        document.getElementById('openAppBtn').addEventListener('click', () => {
+            const windowFeatures = 'width=500,height=450,popup=yes';
+            window.open('app.html', 'transcriptionApp', windowFeatures);
+        });
+    </script>
+</body>
+</html>
