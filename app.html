@@ -4,18 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ditado Digital Pro</title>
+    <!-- Favicon via Data URI para performance -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎤</text></svg>">
+    <!-- Fonte Inter -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Estilos CSS -->
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
     <div id="appContainer" class="container">
+        <!-- Botão de Minimizar/Maximizar Widget -->
         <button id="toggleSizeBtn" class="btn-toggle-size" title="Alternar Modo Compacto">
             <svg id="iconMinimize" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>
             <svg id="iconMaximize" style="display:none;" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
         </button>
 
+        <!-- Cabeçalho -->
         <header class="app-header">
             <div class="header-title">
                 <h1>Ditado Digital <span class="badge-pro">PRO</span></h1>
@@ -24,10 +29,12 @@
         
         <p class="subtitle">Sua voz textualizada com inteligência artificial e persistência de dados.</p>
         
+        <!-- Área do Visualizador de Áudio (Canvas) -->
         <div class="visualizer-container">
             <canvas id="audioVisualizer" width="600" height="60"></canvas>
         </div>
 
+        <!-- Área de Edição de Texto -->
         <div class="editor-area">
             <textarea id="transcriptionArea" placeholder="Toque no microfone e comece a falar..." spellcheck="false"></textarea>
             <div class="editor-footer">
@@ -36,36 +43,50 @@
             </div>
         </div>
 
+        <!-- Barra de Status (Pill) -->
         <div id="statusMsg" class="status-bar"></div>
 
+        <!-- Dock de Controles -->
         <div class="control-dock">
             
+            <!-- Botão Upload -->
             <label class="btn-action btn-upload" data-tooltip="Carregar Áudio">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                 <span>Upload</span>
                 <input type="file" id="fileInput" accept="audio/*">
             </label>
 
+            <!-- Botão Corrigir Gramática -->
             <button id="aiFixBtn" class="btn-action btn-magic" data-tooltip="Corrigir Gramática">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
                 <span>Corrigir</span>
             </button>
 
+            <!-- Botão Principal: Gravar -->
             <button id="micBtn" class="btn-action btn-mic" data-tooltip="Gravar / Parar">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
                 <span>Gravar</span>
             </button>
 
+            <!-- Botão Jurídico (ÍCONE ATUALIZADO: BALANÇA) -->
             <button id="aiLegalBtn" class="btn-action btn-legal" data-tooltip="Converter para Juridiquês">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M3 8h18"/><path d="M3 16h18"/><path d="M3 8l4-5 4 5"/><path d="M13 8l4-5 4 5"/><path d="M3 16l4 5 4-5"/><path d="M13 16l4 5 4-5"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"></path>
+                    <path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"></path>
+                    <path d="M7 21h10"></path>
+                    <path d="M12 3v18"></path>
+                    <path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"></path>
+                </svg>
                 <span>Jurídico</span>
             </button>
 
+            <!-- Botão Copiar -->
             <button id="copyBtn" class="btn-action btn-copy" data-tooltip="Copiar Texto">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                 <span>Copiar</span>
             </button>
 
+             <!-- Botão Limpar -->
              <button id="clearBtn" class="btn-action btn-clear" data-tooltip="Limpar Tudo">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                 <span>Limpar</span>
@@ -73,6 +94,7 @@
         </div>
 
     </div>
-   <script type="module" src="js/main.js"></script>
+    <!-- Alteração Arquitetural: Importação como Módulo -->
+    <script type="module" src="js/main.js"></script>
 </body>
 </html>
