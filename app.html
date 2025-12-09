@@ -6,36 +6,56 @@
     <title>Transcrição Rápida</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎤</text></svg>">
     <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="container">
-        <h1>Ditado Digital</h1>
-        <p>Use o microfone ou envie um arquivo de áudio para transcrição.</p>
+        <header class="app-header">
+            <h1>Ditado Digital</h1>
+            <div id="recordingIndicator" class="recording-badge hidden">
+                <span class="pulse"></span> Gravando...
+            </div>
+        </header>
         
-        <textarea id="transcriptionArea" rows="10" placeholder="Seu texto aparecerá aqui..."></textarea>
+        <p class="subtitle">Transforme voz em texto e utilize IA para aprimorar seu conteúdo.</p>
         
-        <!-- Área de Status da IA -->
+        <div class="editor-wrapper">
+            <textarea id="transcriptionArea" placeholder="Comece a falar ou digite aqui..."></textarea>
+            <div class="editor-footer">
+                <span id="charCount">0 caracteres</span>
+            </div>
+        </div>
+        
         <p id="statusMsg" class="status-message"></p>
 
-        <!-- Grupo 1: Entrada de Áudio (Microfone e Arquivo) -->
-        <div class="button-group input-group">
-            <button id="micBtn" title="Gravar voz em tempo real">
+        <div class="control-bar">
+            <button id="micBtn" class="btn-primary-large" title="Gravar voz">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
-                <span>Gravar</span>
+                <span>Iniciar Gravação</span>
             </button>
             
-            <label for="fileInput" class="icon-btn" title="Transcrever arquivo de áudio (MP3/WAV)">
-                📂 MP3 / Áudio
+            <label for="fileInput" class="btn-secondary" title="Carregar Arquivo">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Upload Áudio
                 <input type="file" id="fileInput" accept="audio/*">
             </label>
         </div>
 
-        <!-- Grupo 2: Ações de IA e Ferramentas -->
-        <div class="button-group ai-actions">
-            <button id="aiFixBtn" class="ai-btn" title="Corrigir gramática e pontuação">✨ Gramática</button>
-            <button id="aiLegalBtn" class="ai-btn" title="Reescrever com linguagem jurídica">⚖️ Jurídico</button>
-            <button id="copyBtn" title="Copiar para a área de transferência">Copiar</button>
-            <button id="clearBtn" title="Limpar todo o texto">Apagar</button>
+        <hr class="divider">
+
+        <div class="tools-grid">
+            <button id="aiFixBtn" class="tool-btn magic">
+                ✨ Melhorar Gramática
+            </button>
+            <button id="aiLegalBtn" class="tool-btn legal">
+                ⚖️ Juridiquês
+            </button>
+            <button id="copyBtn" class="tool-btn action">
+                📋 Copiar
+            </button>
+            <button id="clearBtn" class="tool-btn danger">
+                🗑️ Limpar
+            </button>
         </div>
     </div>
     <script src="script.js" defer></script>
