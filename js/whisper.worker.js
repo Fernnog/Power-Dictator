@@ -1,61 +1,80 @@
 import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.14.0';
 
-// Configurações para forçar o uso de cache e evitar recarregamentos desnecessários
+// ==========================================
+// CONFIGURAÇÃO DE AMBIENTE (Forçando Remoto)
+// ==========================================
+
+// Desativa busca local para evitar erros 404
 env.allowLocalModels = false;
+
+// Permite busca remota (Hugging Face Hub)
+env.allowRemoteModels = true;
+
+// Usa o cache do navegador (IndexedDB) para não baixar 40MB toda vez
+// Na primeira vez é lento, nas próximas é instantâneo.
 env.useBrowserCache = true;
 
+// Opcional: Configura o local onde o cache do WASM é guardado
+// env.cacheDir = '/custom-cache'; // Deixe comentado por enquanto
+
+// ==========================================
+// LÓGICA DO WORKER
+// ==========================================
 let transcriber = null;
 
 self.addEventListener('message', async (event) => {
     const { type, audio } = event.data;
 
-    // 1. Inicialização e Download do Modelo
     if (type === 'load') {
         try {
-            self.postMessage({ status: 'loading', data: 'Iniciando Whisper...' });
-            
-            // Carrega o pipeline de ASR (Automatic Speech Recognition)
-            // Usa a versão "quantizada" (menor e mais rápida) do modelo Tiny
+            self.postMessage({ status: 'loading', data: 'Iniciando download do modelo (40MB)...' });
+
+            // Carrega o modelo Tiny Quantizado diretamente da nuvem
             transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny', {
-                quantized: true,
+                quantized: true, // Importante: baixa a versão leve (~40MB) em vez da full (~150MB)
                 progress_callback: (data) => {
-                    // Repassa o progresso do download para a UI
+                    // Envia porcentagem de download para a barra de progresso
                     if (data.status === 'progress') {
                         self.postMessage({ 
                             status: 'progress', 
-                            file: data.file, 
-                            progress: data.progress 
+                            data: data 
                         });
                     }
                 }
             });
 
             self.postMessage({ status: 'ready' });
+            console.log("Whisper carregado com sucesso!");
+
         } catch (error) {
-            self.postMessage({ status: 'error', data: error.message });
+            console.error("Erro no Worker:", error);
+            self.postMessage({ 
+                status: 'error', 
+                data: `Falha ao baixar modelo: ${error.message}. Verifique sua conexão ou Firewall.`
+            });
         }
     }
 
-    // 2. Transcrição de Áudio
     if (type === 'transcribe' && transcriber) {
         try {
-            // Roda a inferência. O Whisper espera float32 audio array (16kHz)
             const output = await transcriber(audio, {
                 chunk_length_s: 30,
                 stride_length_s: 5,
                 language: 'portuguese',
                 task: 'transcribe',
-                return_timestamps: false 
+                return_timestamps: false // Simplifica o retorno
             });
 
-            // Envia o texto resultante
+            // O output.text contém a transcrição completa
             let text = output.text;
-            if (Array.isArray(text)) text = text[0]; // Tratamento de segurança
             
+            // Pequena limpeza se necessário
+            if(text) text = text.trim();
+
             self.postMessage({ status: 'result', text: text });
+            
         } catch (error) {
-            console.error(error);
-            self.postMessage({ status: 'error', data: "Erro na inferência" });
+            self.postMessage({ status: 'error', data: "Erro na transcrição: " + error.message });
         }
     }
 });
