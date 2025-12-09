@@ -57,11 +57,12 @@ body {
 /* --- MODO MINIMIZADO (WIDGET COMPACTO) --- */
 .container.minimized {
     padding: 10px;
-    height: 100vh; /* Ocupa a janela toda no modo popup */
+    height: 100vh; /* Ocupa toda a altura da janela popup reduzida */
     border-radius: 0;
     background: rgba(255, 255, 255, 0.98);
 }
 
+/* Esconde elementos desnecessários no modo widget */
 .container.minimized .header-title,
 .container.minimized .badge-pro,
 .container.minimized .subtitle,
@@ -194,7 +195,7 @@ textarea {
     background: #fff;
 }
 
-/* Ajustes Editor no Modo Compacto */
+/* Ajustes Específicos do Editor no Modo Compacto */
 .container.minimized .editor-area {
     margin-top: 2rem; /* Espaço para o botão de toggle */
     margin-bottom: 0.5rem;
@@ -212,7 +213,7 @@ textarea {
 }
 
 /* =============================================== */
-/* 5. STATUS PILL (DESIGN PREMIUM)                 */
+/* 5. STATUS PILL                                  */
 /* =============================================== */
 .status-bar {
     display: flex;
@@ -378,6 +379,7 @@ textarea {
     box-shadow: 0 4px 10px rgba(79, 70, 229, 0.25);
 }
 
+/* Exibe apenas estes botões no modo mini */
 .container.minimized .btn-magic { order: 1; display: flex !important; background-color: #f59e0b; }
 .container.minimized .btn-clear { order: 3; display: flex !important; border: none; background: #fee2e2; color: #ef4444; }
 
