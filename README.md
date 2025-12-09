@@ -1,53 +1,54 @@
-# Ditado Digital Pro v2.1 (Enhanced Audio Engine) 🎙️
-> **Sua voz, textualizada. Agora com VAD (Detecção de Voz) e Visualização Espectral Real.**
+# Ditado Digital Pro v3.1 🎙️
+> **Engenharia de Áudio DSP + Inteligência Artificial Contextual.**
+> *A ferramenta definitiva para transcrição jurídica e teológica com Zero Latência.*
 
-![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)
-![Technology](https://img.shields.io/badge/tech-AudioContext_API_%7C_Web_Speech_%7C_Gemini_AI-green.svg)
-![Cost](https://img.shields.io/badge/license-MIT_%7C_Free_Forever-orange.svg)
+![Version](https://img.shields.io/badge/version-3.1.0-blue.svg)
+![Status](https://img.shields.io/badge/status-stable-success.svg)
+![Technology](https://img.shields.io/badge/tech-Web_Audio_API_%7C_Vanilla_JS_%7C_Gemini_Flash-indigo.svg)
 
 ## 📑 Visão Geral do Produto
 
-O **Ditado Digital Pro** evoluiu de um simples wrapper de API para uma ferramenta de produtividade robusta para profissionais de **Direito** e **Teologia**. 
+O **Ditado Digital Pro v3.1** não é apenas um "wrapper" de API. É uma aplicação de engenharia de voz completa que roda localmente no navegador. 
 
-Nesta versão 2.1, abandonamos as animações cosméticas em favor de uma engenharia de áudio real. Implementamos um **Osciloscópio Espectral** e um sistema de **"Blindagem de Fluxo"**, que impede que o reconhecimento de voz seja interrompido prematuramente enquanto você ainda está falando. Tudo isso rodando localmente no navegador, garantindo privacidade e custo zero.
+Nesta versão, abandonamos a captação de áudio crua em favor de um **Pipeline DSP (Digital Signal Processing)** profissional. O som da sua voz é limpo, comprimido e normalizado *antes* de chegar ao motor de reconhecimento, garantindo precisão superior mesmo em ambientes com ruído de ar-condicionado ou eco.
+
+Além disso, introduzimos o **Smart Docking**, transformando a aplicação em um Widget flutuante que respeita a área de trabalho do seu monitor.
 
 ---
 
-## 🚀 Novas Funcionalidades (Engenharia de Áudio)
+## 🚀 Novidades da Versão 3.1
 
-### 1. Sistema Híbrido de Escuta (VAD Baseado em Energia)
-O maior problema dos ditadores web é o corte do microfone em momentos de pausa para respiração.
-* **A Solução:** Implementamos uma classe `AudioEngine` proprietária que analisa a energia RMS (Root Mean Square) do seu áudio em tempo real.
-* **Como funciona:** Se a API de reconhecimento do Google tentar desligar (`onend`), nosso sistema verifica matematicamente se ainda há entrada de voz no microfone. Se houver energia sonora, ele força o reinício imediato da transcrição, criando um fluxo contínuo "à prova de falhas".
+### 1. Cadeia de Tratamento de Áudio (Audio Graph)
+Diferente de ditadores comuns que aceitam qualquer ruído, implementamos nós de áudio nativos (`AudioContext`):
+* **High-Pass Filter (85Hz):** Um filtro passa-alta que corta frequências subgraves (hum elétrico, vibração de mesa, ar-condicionado), limpando o espectro para a IA.
+* **Dynamics Compressor:** Nivela automaticamente o volume da voz. Sussurros ganham ganho, gritos são atenuados. Isso entrega um sinal constante para o reconhecimento.
 
-### 2. True VUI (Visual User Interface)
-Substituímos a animação CSS "fake" por um **Analisador de Espectro Real** (`AnalyserNode`) via HTML5 Canvas.
-* **Visualização:** 30 barras de frequência reagem instantaneamente aos graves e agudos da sua voz.
-* **Benefício:** Feedback visual absoluto. Se as barras se movem, o sistema *está* te ouvindo. Isso elimina a ansiedade de "falar para o nada".
+### 2. Smart Docking (Bottom-Right)
+A interface agora calcula matematicamente a posição da janela baseada na resolução disponível do seu monitor (`screen.availWidth` e `screen.availLeft`).
+* **Benefício:** A janela sempre "nasce" ou se minimiza no canto inferior direito, atuando como um assistente discreto que não bloqueia sua visão central.
+* **Multi-Monitor Ready:** Lógica corrigida para funcionar corretamente mesmo em setups com múltiplos monitores.
 
-### 3. Engenharia de Prompt Contextual (Gemini Flash latest)
-A integração com IA foi reescrita para ser "Context-Aware" (Ciente do Contexto).
-* **Jurídico:** O modo "Jurídico" agora instrui a IA a atuar como um revisor de petições, convertendo linguagem coloquial em "Juridiquês Leve" e formal.
-* **Correção:** A IA analisa o texto completo para corrigir concordância e pontuação sem alterar o sentido teológico ou legal da frase.
+### 3. Modo Widget Compacto
+Ao clicar em "Compactar", a aplicação se transforma:
+* Reduz para **380x300px**.
+* Remove distrações visuais (título, rodapé, botões secundários).
+* Foca exclusivamente no Microfone e no Visualizador Espectral.
+
+### 4. IA com "Contexto Deslizante"
+Ao solicitar correções (Gramática ou Juridiquês), o sistema envia os últimos 2000 caracteres como contexto para o Google Gemini.
+* **Resultado:** A IA entende se você está falando de "manga" (fruta) ou "manga" (camisa) baseada na frase anterior, além de manter a coerência terminológica em textos longos.
 
 ---
 
 ## 🛠️ Arquitetura Técnica
 
-O projeto utiliza uma abordagem *Vanilla JS* moderna, sem dependências de frameworks (React/Vue), garantindo que a aplicação carregue em milissegundos.
+O projeto segue a filosofia **"Vanilla Performance"**: zero frameworks, zero build steps, velocidade máxima.
 
-### Stack Tecnológica
-* **Core:** HTML5, CSS3 (Grid/Flexbox), JavaScript (ES6+ Classes).
-* **Audio Processing:** `window.AudioContext` (Processamento de Sinal Digital - DSP).
-* **Visualização:** `HTML5 Canvas API` (Renderização gráfica a 60fps).
-* **Reconhecimento:** `window.SpeechRecognition` (Motor Nativo do Chrome/Edge).
-* **Inteligência:** Google Gemini API (via REST).
-
-### Estrutura de Arquivos Otimizada
+### Estrutura de Arquivos
 ```text
 /
-├── index.html    # Launcher (Página de boas-vindas)
-├── app.html      # Aplicação Principal (Com Canvas e UI Responsiva)
-├── style.css     # Design System (Inclui estilos do Visualizer)
-├── script.js     # Lógica de Negócios (AudioEngine + DictationEngine)
+├── index.html    # Launcher (Calcula posição e abre o App)
+├── app.html      # Aplicação Principal (Container da UI e Canvas)
+├── style.css     # Design System (Variáveis CSS + Modo Widget)
+├── script.js     # Core Logic (AudioEngine + DictationEngine + Gemini)
 └── README.md     # Documentação Técnica
