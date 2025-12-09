@@ -23,6 +23,11 @@ document.addEventListener('DOMContentLoaded', () => {
         statusMsg: document.getElementById('statusMsg'),
         saveStatus: document.getElementById('saveStatus'),
         
+        // Elementos da Barra de Progresso Whisper (Novos)
+        loadingBar: document.getElementById('modelLoadingBar'),
+        progressFill: document.getElementById('progressFill'),
+        progressText: document.getElementById('progressText'),
+        
         btnCopy: document.getElementById('copyBtn'),
         btnClear: document.getElementById('clearBtn'),
         btnAiFix: document.getElementById('aiFixBtn'),
@@ -46,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
         switch(type) {
             case 'rec': ui.statusMsg.classList.add('status-recording'); break;
             case 'ai': ui.statusMsg.classList.add('status-ai'); break;
+            case 'processing': ui.statusMsg.classList.add('status-processing'); break; // Novo Estado
             case 'success': ui.statusMsg.classList.add('status-success'); break;
             case 'error': ui.statusMsg.classList.add('status-error'); break;
         }
@@ -59,46 +65,92 @@ document.addEventListener('DOMContentLoaded', () => {
     
     let isMachineTyping = false; // Flag para evitar loop de evento 'input'
 
-    // Callback para lidar com resultados do ditado
+    // Callback para lidar com resultados do ditado (Whisper retorna texto consolidado)
     const handleSpeechResult = (finalText, interimText) => {
         isMachineTyping = true;
-        ui.textarea.value = finalText + interimText;
+        
+        // Se houver texto final (Whisper)
+        if (finalText) {
+            // Lógica simples: adiciona espaço se necessário
+            const currentVal = ui.textarea.value;
+            const separator = (currentVal.length > 0 && !currentVal.endsWith(' ') && !currentVal.endsWith('\n')) ? ' ' : '';
+            
+            ui.textarea.value = currentVal + separator + finalText;
+        }
+        
         ui.textarea.scrollTop = ui.textarea.scrollHeight;
         updateCharCount();
-        
-        if (!interimText) {
-            saveToCache();
-        }
+        saveToCache();
         
         // Pequeno delay para liberar a flag
         setTimeout(() => { isMachineTyping = false; }, 50);
     };
 
-    // Callback para lidar com status do microfone
-    const handleSpeechStatus = (status) => {
-        if (status === 'rec') {
-            ui.micBtn.classList.add('recording');
-            ui.micSpan.textContent = "Parar";
-            setStatus('rec', "Ouvindo...");
-        } else if (status === 'idle') {
-            ui.micBtn.classList.remove('recording');
-            ui.micSpan.textContent = "Gravar";
-            setStatus('idle');
-            saveToCache();
+    // Callback para lidar com status do microfone e modelo
+    const handleSpeechStatus = (status, data) => {
+        switch (status) {
+            case 'loading':
+                // Modelo baixando
+                ui.micBtn.disabled = true;
+                ui.micSpan.textContent = "Baixando IA...";
+                ui.loadingBar.style.display = 'block';
+                break;
+            
+            case 'ready':
+                // Modelo pronto
+                ui.micBtn.disabled = false;
+                ui.micSpan.textContent = "Gravar";
+                ui.loadingBar.style.display = 'none';
+                setStatus('success', "IA Pronta");
+                setTimeout(() => setStatus('idle'), 2000);
+                break;
+
+            case 'rec':
+                // Gravando Audio Raw
+                ui.micBtn.classList.add('recording');
+                ui.micSpan.textContent = "Parar";
+                setStatus('rec', "Ouvindo...");
+                break;
+            
+            case 'processing':
+                // Whisper transcrevendo
+                setStatus('processing', "Transcrevendo...");
+                break;
+
+            case 'idle':
+                ui.micBtn.classList.remove('recording');
+                ui.micSpan.textContent = "Gravar";
+                setStatus('idle');
+                saveToCache();
+                break;
+        }
+    };
+
+    // Callback para progresso de download do modelo
+    const handleModelProgress = (data) => {
+        if (data.status === 'progress') {
+            const pct = data.progress.toFixed(0) + '%';
+            ui.progressFill.style.width = pct;
+            ui.progressText.textContent = pct;
+        } else if (data.status === 'initiate') {
+            ui.progressText.textContent = `Iniciando: ${data.file}`;
         }
     };
 
     const handleSpeechError = (msg) => {
         setStatus('error', msg);
         ui.micBtn.classList.remove('recording');
+        ui.micBtn.disabled = false;
     };
 
+    // Instanciação atualizada com novos callbacks para o Whisper
     const speechManager = new SpeechManager(
         ui.canvas, 
         { 
             onResult: handleSpeechResult, 
             onStatus: handleSpeechStatus,
-            onError: handleSpeechError
+            onError: handleSpeechError,
+            onModelProgress: handleModelProgress // Novo callback
         }
     );
 
@@ -115,7 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const saved = localStorage.getItem(STORAGE_KEY_TEXT);
         if (saved) {
             ui.textarea.value = saved;
-            speechManager.updateContext(saved);
+            // Whisper não precisa de "updateContext" prévio da mesma forma que WebSpeech
             updateCharCount();
         }
     }
@@ -133,8 +185,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 1. Microfone
     ui.micBtn.addEventListener('click', () => {
-        // Envia o texto atual para o speech manager saber onde continuar
-        speechManager.toggle(ui.textarea.value);
+        speechManager.toggle();
     });
 
     // 2. Edição Manual
@@ -142,7 +193,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isMachineTyping) return;
         ui.saveStatus.textContent = "Digitando...";
         updateCharCount();
-        speechManager.updateContext(ui.textarea.value); // Atualiza contexto do ditado
         saveToCache();
     });
 
@@ -168,7 +218,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     ui.textarea.value = result; 
                 }
                 
-                speechManager.updateContext(ui.textarea.value);
                 saveToCache();
                 updateCharCount();
                 setStatus('success', "Feito!");
@@ -206,7 +255,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     const sep = (ui.textarea.value) ? '\n\n' : '';
                     const newContent = ui.textarea.value + sep + result;
                     ui.textarea.value = newContent;
-                    speechManager.updateContext(newContent);
                     saveToCache();
                     updateCharCount();
                     setStatus('success', "Transcrito!");
@@ -232,7 +280,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (ui.textarea.value.length === 0) return;
         if (confirm("Deseja apagar tudo?")) {
             ui.textarea.value = '';
-            speechManager.updateContext('');
             saveToCache();
             updateCharCount();
             ui.textarea.focus();
