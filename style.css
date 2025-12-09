@@ -1,5 +1,5 @@
 /* =============================================== */
-/* 1. RESET & VARIÁVEIS DE CORES (DESIGN SYSTEM)   */
+/* 1. RESET & VARIÁVEIS DE CORES                   */
 /* =============================================== */
 :root {
     /* Cores Funcionais */
@@ -34,7 +34,7 @@ body {
     align-items: center;
     min-height: 100vh;
     margin: 0;
-    overflow: hidden; /* Evita scroll na janela principal */
+    overflow: hidden; 
 }
 
 /* =============================================== */
@@ -43,7 +43,8 @@ body {
 .container {
     background-color: var(--bg-card);
     width: 100%;
-    max-width: 800px;
+    /* Aumentado para 950px para garantir que não corte em telas menores */
+    max-width: 950px; 
     height: 90vh;
     border-radius: var(--radius);
     box-shadow: var(--shadow-soft);
@@ -51,23 +52,31 @@ body {
     display: flex;
     flex-direction: column;
     box-sizing: border-box;
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
 }
 
-/* --- MODO COMPACTO (Minimizado) --- */
+/* --- MODO COMPACTO (Widget Quadrado) --- */
 .container.minimized {
     padding: 1rem;
-    border-radius: 0; /* Remove bordas arredondadas para encaixar no canto */
-    background: rgba(255, 255, 255, 0.98);
+    border-radius: 0;
+    background: rgba(255, 255, 255, 0.99);
+    /* Removemos a altura fixa aqui, deixamos o JS controlar a janela */
 }
 
 /* Ocultar elementos desnecessários no modo compacto */
-.container.minimized .header-info,
+.container.minimized .header-title,
+.container.minimized .badge-pro,
 .container.minimized .subtitle,
-.container.minimized .char-info,
-.container.minimized .app-header {
+.container.minimized .editor-footer {
     display: none;
+}
+
+/* Ajuste do Header no modo compacto para manter apenas o botão de expandir */
+.container.minimized .app-header {
+    margin-bottom: 0;
+    height: 0;
+    overflow: visible;
 }
 
 /* =============================================== */
@@ -105,7 +114,7 @@ body {
     margin-bottom: 1.5rem;
 }
 
-/* Botão de redimensionar (Canto superior) */
+/* Botão de redimensionar */
 .btn-toggle-size {
     position: absolute;
     top: 1rem;
@@ -156,7 +165,6 @@ textarea {
     box-sizing: border-box;
 }
 
-/* Footer do Editor (Contador e Status) */
 .editor-footer {
     padding: 0.5rem 1rem;
     border-top: 1px solid var(--border);
@@ -167,17 +175,19 @@ textarea {
     background: #fff;
 }
 
-/* No modo minimizado, ajustamos o editor */
+/* Ajustes Editor Modo Compacto */
 .container.minimized .editor-area {
-    margin-bottom: 0.5rem;
-    border-radius: 8px;
+    margin-top: 1.5rem; /* Espaço para o botão de maximizar */
+    margin-bottom: 0.8rem;
+    border-radius: 12px;
+    background: #fff;
+    border-color: #e5e7eb;
 }
+
 .container.minimized textarea {
     padding: 0.8rem;
     font-size: 1rem;
 }
-.container.minimized .editor-footer { display: none; }
-
 
 /* =============================================== */
 /* 5. DOCK DE CONTROLE (BOTÕES)                    */
@@ -185,121 +195,111 @@ textarea {
 .control-dock {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px; /* Reduzi levemente o gap para caber melhor */
     padding: 0.5rem;
     transition: all 0.3s ease;
 }
 
-/* Comportamento Expandido: Botões cheios com texto */
+/* --- ESTILO EXPANDIDO --- */
 .btn-action {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
-    padding: 12px 20px;
+    /* Ajuste de Padding: 12px vert, 16px horiz (era 20px) para economizar espaço lateral */
+    padding: 12px 16px; 
     border-radius: var(--btn-radius);
     border: none;
     font-weight: 600;
-    font-size: 0.95rem;
+    font-size: 0.9rem; /* Leve redução na fonte */
     cursor: pointer;
     transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
     color: white;
-    flex: 1; /* Distribui espaço uniformemente */
+    flex: 1; 
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    position: relative; /* Para tooltip */
+    position: relative;
+    white-space: nowrap; /* Impede quebra de texto */
 }
 
-.btn-action span {
-    display: inline-block; /* Mostra texto no modo expandido */
-}
-
-/* Ícones SVG */
+/* Ícones */
 .btn-action svg {
     width: 20px;
     height: 20px;
     stroke-width: 2.5;
+    flex-shrink: 0;
 }
 
-/* CORES ESPECÍFICAS (Variáveis definidas no root) */
-.btn-mic    { background-color: var(--c-mic); flex: 2; /* Microfone ocupa mais espaço */ }
+/* Cores */
+.btn-mic    { background-color: var(--c-mic); flex: 1.5; }
 .btn-upload { background-color: var(--c-upload); color: white;}
 .btn-magic  { background-color: var(--c-magic); color: white;}
 .btn-legal  { background-color: var(--c-legal); color: white;}
 .btn-copy   { background-color: var(--c-copy); color: white;}
 .btn-clear  { background-color: white; color: var(--c-clear); border: 1px solid #fecaca; }
 
-/* Hovers */
-.btn-action:hover { transform: translateY(-2px); filter: brightness(1.08); shadow: var(--shadow-hover); }
+.btn-action:hover { transform: translateY(-2px); filter: brightness(1.08); }
 .btn-clear:hover { background-color: #fef2f2; }
 
 
-/* --- MODO COMPACTO: TRANSFORMAÇÃO --- */
+/* --- MODO COMPACTO (Transformação) --- */
 .container.minimized .control-dock {
-    justify-content: space-between;
+    justify-content: center; /* Centraliza os botões no novo espaço quadrado */
     gap: 8px;
     padding: 0;
+    flex-wrap: nowrap; /* Garante uma linha única */
 }
 
 .container.minimized .btn-action {
-    flex: 0 0 auto; /* Não estica */
-    width: 42px;
-    height: 42px;
+    flex: 0 0 auto; 
+    width: 44px; /* Botões levemente maiores para toque fácil */
+    height: 44px;
     padding: 0;
-    border-radius: 50%; /* Vira círculo */
+    border-radius: 50%;
 }
 
 .container.minimized .btn-mic {
-    width: 56px; /* Microfone um pouco maior */
-    height: 56px;
-    order: 3; /* Coloca o microfone no meio ou fim se desejar, aqui vou centralizar visualmente */
+    width: 58px; /* Destaque central */
+    height: 58px;
+    order: 3; 
+    margin: 0 4px;
 }
 
-.container.minimized .btn-action span {
-    display: none; /* Oculta o texto */
-}
+.container.minimized .btn-action span { display: none; }
 
 /* =============================================== */
-/* 6. TOOLTIPS (APENAS HOVER)                      */
+/* 6. TOOLTIPS & STATUS                            */
 /* =============================================== */
-/* Lógica: data-tooltip aparece em cima do botão */
 [data-tooltip]:hover::after {
     content: attr(data-tooltip);
     position: absolute;
-    bottom: 115%;
+    bottom: 120%;
     left: 50%;
     transform: translateX(-50%);
     background: #1f2937;
     color: white;
-    padding: 5px 10px;
+    padding: 6px 10px;
     border-radius: 6px;
     font-size: 0.75rem;
     white-space: nowrap;
     z-index: 100;
-    opacity: 0;
-    animation: fadeIn 0.2s forwards;
     pointer-events: none;
+    animation: fadeIn 0.2s forwards;
 }
 
 [data-tooltip]:hover::before {
     content: '';
     position: absolute;
-    bottom: 105%;
+    bottom: 110%;
     left: 50%;
     transform: translateX(-50%);
     border-width: 5px;
     border-style: solid;
     border-color: #1f2937 transparent transparent transparent;
-    opacity: 0;
     animation: fadeIn 0.2s forwards;
 }
 
-@keyframes fadeIn { to { opacity: 1; transform: translateX(-50%) translateY(-5px); } }
+@keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(5px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
 
-/* =============================================== */
-/* 7. ESTADOS ESPECÍFICOS (GRAVANDO, ETC)          */
-/* =============================================== */
-
-/* Microfone Gravando */
 .btn-mic.recording {
     background-color: var(--c-mic-rec);
     animation: pulse 1.5s infinite;
@@ -311,10 +311,8 @@ textarea {
     100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 }
 
-/* Input de arquivo escondido */
 #fileInput { display: none; }
 
-/* Status de Feedback */
 .status-bar {
     text-align: center;
     font-size: 0.85rem;
@@ -325,10 +323,10 @@ textarea {
 }
 .status-bar.error { color: var(--c-clear); }
 
-/* Ajuste Fino para Layout Compacto: Ordem dos botões */
+/* Ajuste de Ordem no Compacto */
 .container.minimized .btn-upload { order: 1; }
 .container.minimized .btn-magic  { order: 2; }
-.container.minimized .btn-mic    { order: 3; margin: 0 8px; } /* Destaque central */
+.container.minimized .btn-mic    { order: 3; }
 .container.minimized .btn-legal  { order: 4; }
 .container.minimized .btn-copy   { order: 5; }
-.container.minimized .btn-clear  { display: none; } /* Opcional: esconder limpar no modo mini para evitar acidentes, ou manter order:6 */
+.container.minimized .btn-clear  { order: 6; display: flex; }
