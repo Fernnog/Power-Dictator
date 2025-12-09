@@ -8,12 +8,15 @@ document.addEventListener('DOMContentLoaded', () => {
         fileInput: document.getElementById('fileInput'),
         aiFixBtn: document.getElementById('aiFixBtn'),
         aiLegalBtn: document.getElementById('aiLegalBtn'),
-        statusMsg: document.getElementById('statusMsg')
+        statusMsg: document.getElementById('statusMsg'),
+        // Novos elementos da UI aprimorada
+        recordingIndicator: document.getElementById('recordingIndicator'),
+        charCount: document.getElementById('charCount')
     };
 
-    // Configurações do 
+    // Configurações do Gemini
     const GEMINI_CONFIG = {
-        model: 'gemini-flash-latest', // Modelo rápido e multimodal (aceita áudio)
+        model: 'gemini-flash-latest', 
         keyStorage: 'ditado_digital_gemini_key'
     };
 
@@ -22,6 +25,15 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateStatus(msg) {
         elements.statusMsg.textContent = msg;
     }
+
+    // Atualiza o contador de caracteres
+    function updateCharCount() {
+        const count = elements.transcriptionArea.value.length;
+        elements.charCount.textContent = `${count} caracteres`;
+    }
+
+    // Listener para contar caracteres enquanto digita
+    elements.transcriptionArea.addEventListener('input', updateCharCount);
 
     // Gerenciamento da API Key
     function getApiKey() {
@@ -44,7 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const apiKey = getApiKey();
         if (!apiKey) return null;
 
-        updateStatus("🤖 Processando com Inteligência Artificial... Aguarde.");
+        updateStatus("🤖 Processando com Inteligência Artificial...");
         
         try {
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_CONFIG.model}:generateContent?key=${apiKey}`, {
@@ -55,7 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!response.ok) {
                 if (response.status === 400 || response.status === 403) {
-                    localStorage.removeItem(GEMINI_CONFIG.keyStorage); // Remove chave se inválida
+                    localStorage.removeItem(GEMINI_CONFIG.keyStorage); 
                     throw new Error("Chave API inválida ou expirada.");
                 }
                 throw new Error(`Erro API: ${response.status}`);
@@ -67,7 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error("A IA não retornou conteúdo válido.");
             }
 
-            updateStatus(""); // Limpa status em caso de sucesso
+            updateStatus(""); 
             return data.candidates[0].content.parts[0].text.trim();
 
         } catch (error) {
@@ -78,12 +90,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- FUNCIONALIDADE 1: WEB SPEECH API (Microfone em tempo real) ---
+    // --- FUNCIONALIDADE 1: WEB SPEECH API (Microfone) ---
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     
     if (!SpeechRecognition) {
         alert("Seu navegador não suporta a API de reconhecimento de voz nativa.");
         elements.micBtn.disabled = true;
+        elements.micBtn.textContent = "Não suportado";
     } else {
         const recognition = new SpeechRecognition();
         recognition.lang = 'pt-BR';
@@ -96,21 +109,26 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.micBtn.addEventListener('click', () => {
             isRecording = !isRecording;
             if (isRecording) {
-                // Captura o que já existe para não sobrescrever
+                // Captura texto existente
                 finalTranscript = elements.transcriptionArea.value; 
-                // Se não terminar com espaço ou quebra de linha, adiciona espaço
                 if (finalTranscript && !/[\s\n]$/.test(finalTranscript)) {
                     finalTranscript += ' ';
                 }
                 
                 recognition.start();
+                
+                // Atualiza UI para estado GRAVANDO
                 elements.micBtn.classList.add('recording');
-                elements.micBtn.querySelector('span').textContent = 'Parar';
+                elements.micBtn.querySelector('span').textContent = 'Parar Gravação';
+                elements.recordingIndicator.classList.remove('hidden'); // Mostra badge
                 updateStatus("🎙️ Ouvindo...");
             } else {
                 recognition.stop();
+                
+                // Atualiza UI para estado PARADO
                 elements.micBtn.classList.remove('recording');
-                elements.micBtn.querySelector('span').textContent = 'Gravar';
+                elements.micBtn.querySelector('span').textContent = 'Iniciar Gravação';
+                elements.recordingIndicator.classList.add('hidden'); // Esconde badge
                 updateStatus("");
             }
         });
@@ -125,18 +143,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
             elements.transcriptionArea.value = finalTranscript + interimTranscript;
-            
-            // Auto-scroll para o final
             elements.transcriptionArea.scrollTop = elements.transcriptionArea.scrollHeight;
+            updateCharCount(); // Atualiza contador em tempo real
         };
 
         recognition.onend = () => {
-            // Se a gravação parar por silêncio, mas o botão ainda estiver ativo (estado lógico), reinicia?
-            // Neste design simples, apenas resetamos o botão se ele parou sozinho.
             if (isRecording) {
                 isRecording = false;
                 elements.micBtn.classList.remove('recording');
-                elements.micBtn.querySelector('span').textContent = 'Gravar';
+                elements.micBtn.querySelector('span').textContent = 'Iniciar Gravação';
+                elements.recordingIndicator.classList.add('hidden'); // Garante que o badge suma
                 updateStatus("");
             }
         };
@@ -144,17 +160,17 @@ document.addEventListener('DOMContentLoaded', () => {
         recognition.onerror = (event) => {
             console.error("Erro no reconhecimento de fala:", event.error);
             updateStatus(`Erro no microfone: ${event.error}`);
+            elements.recordingIndicator.classList.add('hidden');
         };
     }
 
-    // --- FUNCIONALIDADE 2: UPLOAD DE ARQUIVO (MP3 via Gemini) ---
+    // --- FUNCIONALIDADE 2: UPLOAD DE ARQUIVO (MP3) ---
     elements.fileInput.addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
-        // Verifica tamanho (Limite grosseiro para Base64/API gratuita ~20MB safe zone)
         if (file.size > 20 * 1024 * 1024) {
-            alert("O arquivo é muito grande para este método de upload. Tente arquivos menores que 20MB.");
+            alert("Arquivo muito grande. Limite aprox: 20MB.");
             elements.fileInput.value = '';
             return;
         }
@@ -165,12 +181,12 @@ document.addEventListener('DOMContentLoaded', () => {
         reader.readAsDataURL(file);
         
         reader.onloadend = async () => {
-            const base64Data = reader.result.split(',')[1]; // Remove o cabeçalho "data:audio/mp3;base64,"
+            const base64Data = reader.result.split(',')[1];
             
             const payload = {
                 contents: [{
                     parts: [
-                        { text: "Transcreva este áudio fielmente para o Português do Brasil. Não adicione comentários, apenas o texto falado." },
+                        { text: "Transcreva este áudio fielmente para o Português do Brasil. Não adicione comentários." },
                         { inlineData: { mimeType: file.type, data: base64Data } }
                     ]
                 }]
@@ -182,44 +198,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 const currentText = elements.transcriptionArea.value;
                 const separator = (currentText && !/[\s\n]$/.test(currentText)) ? '\n\n' : '';
                 elements.transcriptionArea.value += separator + transcription;
+                updateCharCount();
             }
             
-            elements.fileInput.value = ''; // Reseta o input para permitir enviar o mesmo arquivo novamente se necessário
+            elements.fileInput.value = ''; 
         };
     });
 
-    // --- FUNCIONALIDADE 3: CORREÇÃO E REFINAMENTO DE TEXTO (IA) ---
+    // --- FUNCIONALIDADE 3: CORREÇÃO IA ---
     async function applyAiCorrection(mode) {
         const text = elements.transcriptionArea.value;
         if (!text || !text.trim()) {
-            alert("A área de texto está vazia. Dite ou escreva algo primeiro.");
+            alert("A área de texto está vazia.");
             return;
         }
 
         let promptText = "";
         
-        // Definição dos Prompts
         if (mode === 'fix') {
             promptText = `
-            Atue como um editor de textos profissional.
-            Sua tarefa é corrigir a gramática, pontuação e clareza do texto abaixo.
-            Regras OBRIGATÓRIAS:
-            1. Mantenha o tom original.
-            2. Corrija erros de concordância e capitalize frases.
-            3. NÃO adicione introduções. Retorne APENAS o conteúdo tratado.
-            4. PROTEÇÃO DE CITAÇÕES: O que estiver entre aspas (" " ou ' ') DEVE ser mantido EXATAMENTE como está.
-            
+            Atue como um editor profissional. Corrija gramática e pontuação.
+            Mantenha o tom original. Retorne APENAS o texto corrigido.
             Texto: "${text}"`;
         } else if (mode === 'legal') {
             promptText = `
-            Atue como um advogado sênior e editor jurídico.
-            Reescreva o texto abaixo utilizando linguagem jurídica culta, formal e precisa.
-            Regras OBRIGATÓRIAS:
-            1. Eleve o vocabulário para um padrão técnico-jurídico.
-            2. Mantenha o sentido original da mensagem.
-            3. NÃO adicione introduções. Retorne APENAS o conteúdo tratado.
-            4. PROTEÇÃO DE CITAÇÕES: O que estiver entre aspas (" " ou ' ') DEVE ser mantido EXATAMENTE como está.
-            
+            Atue como advogado sênior. Reescreva em linguagem jurídica formal.
+            Retorne APENAS o texto reescrito.
             Texto: "${text}"`;
         }
 
@@ -230,37 +234,30 @@ document.addEventListener('DOMContentLoaded', () => {
         const result = await callGemini(payload);
         if (result) {
             elements.transcriptionArea.value = result;
+            updateCharCount();
         }
     }
 
     elements.aiFixBtn.addEventListener('click', () => applyAiCorrection('fix'));
     elements.aiLegalBtn.addEventListener('click', () => applyAiCorrection('legal'));
 
-    // --- FUNCIONALIDADE 4: UTILITÁRIOS (Copiar e Apagar) ---
-    
-    // Copiar
+    // --- FUNCIONALIDADE 4: UTILITÁRIOS ---
     elements.copyBtn.addEventListener('click', () => {
         if (elements.transcriptionArea.value) {
             navigator.clipboard.writeText(elements.transcriptionArea.value)
                 .then(() => {
                     const originalText = elements.copyBtn.textContent;
                     elements.copyBtn.textContent = 'Copiado!';
-                    setTimeout(() => {
-                        elements.copyBtn.textContent = originalText;
-                    }, 2000);
-                })
-                .catch(err => {
-                    console.error('Falha ao copiar texto: ', err);
-                    alert('Não foi possível copiar o texto.');
+                    setTimeout(() => { elements.copyBtn.textContent = originalText; }, 2000);
                 });
         }
     });
 
-    // Apagar
     elements.clearBtn.addEventListener('click', () => {
         if (elements.transcriptionArea.value) {
-            if (confirm("Tem certeza que deseja apagar todo o texto?")) {
+            if (confirm("Apagar todo o texto?")) {
                 elements.transcriptionArea.value = ''; 
+                updateCharCount();
                 elements.transcriptionArea.focus();
             }
         }
