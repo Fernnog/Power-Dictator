@@ -11,11 +11,18 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
+    <div id="appContainer" class="container">
         <header class="app-header">
-            <div class="header-title">
-                <h1>Ditado Digital</h1>
-                <span class="badge-pro">PRO</span>
+            <div class="header-left">
+                <button id="toggleSizeBtn" class="btn-toggle-size" title="Alternar Modo Compacto">
+                    <svg id="iconMinimize" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>
+                    <svg id="iconMaximize" style="display:none;" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+                </button>
+                
+                <div class="header-title">
+                    <h1>Ditado Digital</h1>
+                    <span class="badge-pro">PRO</span>
+                </div>
             </div>
             
             <div id="recordingIndicator" class="recording-badge hidden">
@@ -32,13 +39,15 @@
         <p class="subtitle">Motor VUI persistente com reconhecimento contínuo e IA integrada.</p>
         
         <div class="editor-wrapper">
-            <textarea id="transcriptionArea" placeholder="Comece a falar... O texto é salvo automaticamente no seu navegador." spellcheck="false"></textarea>
+            <textarea id="transcriptionArea" placeholder="Comece a falar... O texto é salvo automaticamente." spellcheck="false"></textarea>
             <div class="editor-footer">
                 <div class="footer-info">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
                     <span id="charCount">0 caracteres</span>
                 </div>
-                <span id="saveStatus" class="save-status">Sincronizado</span>
+                <span id="saveStatus" class="save-status">
+                    <span>Pronto</span>
+                </span>
             </div>
         </div>
         
@@ -50,7 +59,7 @@
                 <span>Iniciar Gravação</span>
             </button>
             
-            <label for="fileInput" class="btn-secondary" title="Carregar Arquivo MP3/WAV">
+            <label for="fileInput" class="btn-secondary secondary-controls" title="Carregar Arquivo MP3/WAV">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                 Upload Áudio
                 <input type="file" id="fileInput" accept="audio/*">
