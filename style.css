@@ -1,24 +1,32 @@
 /* =============================================== */
-/* RESET & VARIÁVEIS                               */
+/* 1. RESET & VARIÁVEIS DE CORES (DESIGN SYSTEM)   */
 /* =============================================== */
 :root {
-    --primary: #4f46e5;       
-    --primary-hover: #4338ca;
-    --success: #059669;
-    --danger: #ef4444;        
-    --bg-app: #f3f4f6;        
-    --bg-card: #ffffff;       
+    /* Cores Funcionais */
+    --c-mic: #4f46e5;      /* Indigo */
+    --c-mic-rec: #ef4444;  /* Red Pulse */
+    --c-upload: #8b5cf6;   /* Violet */
+    --c-magic: #f59e0b;    /* Amber */
+    --c-legal: #0ea5e9;    /* Sky Blue */
+    --c-copy: #10b981;     /* Emerald */
+    --c-clear: #f43f5e;    /* Rose */
+    
+    /* UI Neutros */
+    --bg-app: #f3f4f6;
+    --bg-card: #ffffff;
     --text-main: #1f2937;
     --text-muted: #6b7280;
     --border: #e5e7eb;
-    --border-hover: #d1d5db;
-    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    --radius: 12px;
+    
+    /* Sombras & Radius */
+    --shadow-soft: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    --shadow-hover: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    --radius: 16px;
+    --btn-radius: 12px;
 }
 
 body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: 'Inter', sans-serif;
     background-color: var(--bg-app);
     color: var(--text-main);
     display: flex;
@@ -26,383 +34,301 @@ body {
     align-items: center;
     min-height: 100vh;
     margin: 0;
-    line-height: 1.5;
-    padding: 1rem;
-    box-sizing: border-box;
-    transition: background-color 0.3s;
+    overflow: hidden; /* Evita scroll na janela principal */
 }
 
 /* =============================================== */
-/* CONTAINER PRINCIPAL                             */
+/* 2. CONTAINER PRINCIPAL                          */
 /* =============================================== */
 .container {
     background-color: var(--bg-card);
-    padding: 2rem 2.5rem;
-    border-radius: 16px;
-    box-shadow: var(--shadow-md);
     width: 100%;
-    max-width: 720px;
-    box-sizing: border-box;
-    transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+    max-width: 800px;
+    height: 90vh;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+    padding: 2rem;
     display: flex;
     flex-direction: column;
-    max-height: 95vh; 
+    box-sizing: border-box;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
 }
 
-/* MODO MINIMIZADO (Compact Mode) */
+/* --- MODO COMPACTO (Minimizado) --- */
 .container.minimized {
-    padding: 1rem; /* Padding reduzido */
-    max-width: 500px;
-    background-color: rgba(255, 255, 255, 0.98);
+    padding: 1rem;
+    border-radius: 0; /* Remove bordas arredondadas para encaixar no canto */
+    background: rgba(255, 255, 255, 0.98);
 }
 
+/* Ocultar elementos desnecessários no modo compacto */
+.container.minimized .header-info,
 .container.minimized .subtitle,
-.container.minimized .tools-grid,
-.container.minimized .divider,
-.container.minimized .control-bar { /* Oculta a barra de controle principal */
+.container.minimized .char-info,
+.container.minimized .app-header {
     display: none;
-    opacity: 0;
 }
 
-/* Exibe o microfone do header apenas no minimizado */
-.container.minimized .btn-header-mic {
-    display: flex; 
-}
-
-/* Ajustes de Texto e Editor no modo Mini */
-.container.minimized h1 { font-size: 1rem; }
-.container.minimized .badge-pro { display: none; }
-.container.minimized .editor-wrapper { margin-bottom: 0; flex-grow: 1; }
-.container.minimized textarea { min-height: 120px; padding: 1rem; }
-.container.minimized .status-message { margin: 0.2rem 0; font-size: 0.8rem; min-height: auto; }
-
-/* HEADER */
+/* =============================================== */
+/* 3. HEADER                                       */
+/* =============================================== */
 .app-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 0.5rem;
-    height: 32px; /* Altura fixa para evitar pulos */
+    margin-bottom: 1rem;
 }
 
-.header-left {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.header-title {
+.header-title h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0;
+    letter-spacing: -0.5px;
     display: flex;
     align-items: center;
     gap: 8px;
 }
 
-h1 {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #111827;
-    margin: 0;
-    letter-spacing: -0.02em;
-}
-
 .badge-pro {
-    font-size: 0.65rem;
-    color: var(--primary);
-    background: #eef2ff;
-    border: 1px solid #c7d2fe;
+    font-size: 0.7rem;
+    background: #e0e7ff;
+    color: var(--c-mic);
     padding: 2px 6px;
     border-radius: 4px;
     font-weight: 700;
-    letter-spacing: 0.5px;
 }
 
 .subtitle {
     color: var(--text-muted);
     font-size: 0.95rem;
     margin-bottom: 1.5rem;
-    text-align: left;
-    transition: opacity 0.2s;
 }
 
-/* Botão de Minimizar */
+/* Botão de redimensionar (Canto superior) */
 .btn-toggle-size {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
     background: transparent;
     border: none;
     color: var(--text-muted);
     cursor: pointer;
-    padding: 6px;
+    padding: 8px;
     border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.2s;
+    z-index: 10;
 }
 .btn-toggle-size:hover { background: #f3f4f6; color: var(--text-main); }
 
-/* Botão Microfone do Header */
-.btn-header-mic {
-    display: none; /* Oculto por padrão */
-    background-color: var(--primary);
-    color: white;
-    border: none;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    box-shadow: 0 2px 4px rgba(79, 70, 229, 0.2);
-    transition: all 0.2s;
-}
-.btn-header-mic:hover { background-color: var(--primary-hover); transform: scale(1.05); }
-
-/* Animação Pulso no Header Mic */
-.btn-header-mic.recording {
-    background-color: #fef2f2;
-    color: var(--danger);
-    border: 1px solid var(--danger);
-    animation: pulse-red 2s infinite;
-}
-
 /* =============================================== */
-/* INDICADOR DE GRAVAÇÃO & VISUALIZADOR            */
+/* 4. ÁREA DE TEXTO (EDITOR)                       */
 /* =============================================== */
-.recording-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--danger);
-    background: #fff1f2;
-    padding: 6px 16px;
-    border-radius: 20px;
-    border: 1px solid #fecaca;
-    transition: all 0.3s ease;
-    opacity: 1;
-}
-
-/* No modo minimizado, o badge compete com o botão mic do header, vamos simplificar */
-.container.minimized .recording-badge {
-    display: none;
-}
-
-.recording-badge.hidden {
-    opacity: 0;
-    pointer-events: none;
-    transform: translateY(-5px);
-}
-
-.audio-visualizer {
-    display: flex;
-    align-items: center;
-    gap: 3px;
-    height: 16px;
-}
-
-.audio-visualizer .bar {
-    width: 3px;
-    background-color: var(--danger);
-    border-radius: 2px;
-    height: 4px;
-    transition: height 0.08s ease;
-    min-height: 4px;
-}
-
-/* =============================================== */
-/* ÁREA DO EDITOR                                  */
-/* =============================================== */
-.editor-wrapper {
-    position: relative;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    transition: border-color 0.2s, box-shadow 0.2s;
-    background: #fff;
-    margin-bottom: 1rem;
+.editor-area {
+    flex-grow: 1;
     display: flex;
     flex-direction: column;
-    flex-grow: 1; 
+    background: #f9fafb;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    transition: all 0.3s;
+    margin-bottom: 1.5rem;
+    overflow: hidden;
 }
 
-.editor-wrapper:focus-within {
-    border-color: var(--primary);
+.editor-area:focus-within {
+    border-color: var(--c-mic);
     box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    background: #fff;
 }
 
 textarea {
     width: 100%;
-    min-height: 200px;
-    padding: 1.25rem;
+    height: 100%;
     border: none;
-    border-radius: var(--radius) var(--radius) 0 0;
-    font-size: 1.05rem;
+    padding: 1.5rem;
+    font-size: 1.1rem;
     line-height: 1.6;
-    resize: vertical;
+    background: transparent;
+    resize: none;
     outline: none;
     font-family: inherit;
     color: #374151;
     box-sizing: border-box;
 }
 
+/* Footer do Editor (Contador e Status) */
 .editor-footer {
     padding: 0.5rem 1rem;
-    background: #f9fafb;
     border-top: 1px solid var(--border);
-    border-radius: 0 0 var(--radius) var(--radius);
     font-size: 0.75rem;
     color: var(--text-muted);
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    background: #fff;
 }
 
-.footer-info {
+/* No modo minimizado, ajustamos o editor */
+.container.minimized .editor-area {
+    margin-bottom: 0.5rem;
+    border-radius: 8px;
+}
+.container.minimized textarea {
+    padding: 0.8rem;
+    font-size: 1rem;
+}
+.container.minimized .editor-footer { display: none; }
+
+
+/* =============================================== */
+/* 5. DOCK DE CONTROLE (BOTÕES)                    */
+/* =============================================== */
+.control-dock {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 12px;
+    padding: 0.5rem;
+    transition: all 0.3s ease;
 }
 
-.save-status {
-    color: var(--text-muted);
-    font-weight: 500;
+/* Comportamento Expandido: Botões cheios com texto */
+.btn-action {
     display: flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 0.75rem;
-    transition: color 0.3s;
-}
-
-.save-status.saved {
-    color: var(--success);
-}
-
-/* =============================================== */
-/* MENSAGENS E STATUS                              */
-/* =============================================== */
-.status-message {
-    min-height: 24px;
-    font-size: 0.9rem;
-    color: var(--primary);
-    font-weight: 500;
-    margin: 0.5rem 0 1rem 0;
-    text-align: center;
-    transition: color 0.3s;
-}
-
-.status-message.error {
-    color: var(--danger);
-}
-
-/* =============================================== */
-/* CONTROLES E BOTÕES                              */
-/* =============================================== */
-.control-bar {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-}
-
-@media (min-width: 500px) {
-    .control-bar {
-        grid-template-columns: 2fr 1fr;
-    }
-}
-
-button, .btn-secondary, .tool-btn {
-    cursor: pointer;
-    border: none;
-    font-family: inherit;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.5rem;
-    text-decoration: none;
-    user-select: none;
-}
-
-/* Botão Principal */
-.btn-primary-large {
-    background-color: var(--primary);
-    color: white;
-    padding: 0.85rem;
-    border-radius: var(--radius);
+    gap: 8px;
+    padding: 12px 20px;
+    border-radius: var(--btn-radius);
+    border: none;
     font-weight: 600;
-    font-size: 1.05rem;
-    box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);
-    position: relative;
-    overflow: hidden;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+    color: white;
+    flex: 1; /* Distribui espaço uniformemente */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    position: relative; /* Para tooltip */
 }
-.btn-primary-large:hover { background-color: var(--primary-hover); transform: translateY(-1px); }
-.btn-primary-large:active { transform: scale(0.98); }
 
-/* Animação de Pulso (Ripple) ao Gravar */
-@keyframes pulse-red {
+.btn-action span {
+    display: inline-block; /* Mostra texto no modo expandido */
+}
+
+/* Ícones SVG */
+.btn-action svg {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2.5;
+}
+
+/* CORES ESPECÍFICAS (Variáveis definidas no root) */
+.btn-mic    { background-color: var(--c-mic); flex: 2; /* Microfone ocupa mais espaço */ }
+.btn-upload { background-color: var(--c-upload); color: white;}
+.btn-magic  { background-color: var(--c-magic); color: white;}
+.btn-legal  { background-color: var(--c-legal); color: white;}
+.btn-copy   { background-color: var(--c-copy); color: white;}
+.btn-clear  { background-color: white; color: var(--c-clear); border: 1px solid #fecaca; }
+
+/* Hovers */
+.btn-action:hover { transform: translateY(-2px); filter: brightness(1.08); shadow: var(--shadow-hover); }
+.btn-clear:hover { background-color: #fef2f2; }
+
+
+/* --- MODO COMPACTO: TRANSFORMAÇÃO --- */
+.container.minimized .control-dock {
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0;
+}
+
+.container.minimized .btn-action {
+    flex: 0 0 auto; /* Não estica */
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    border-radius: 50%; /* Vira círculo */
+}
+
+.container.minimized .btn-mic {
+    width: 56px; /* Microfone um pouco maior */
+    height: 56px;
+    order: 3; /* Coloca o microfone no meio ou fim se desejar, aqui vou centralizar visualmente */
+}
+
+.container.minimized .btn-action span {
+    display: none; /* Oculta o texto */
+}
+
+/* =============================================== */
+/* 6. TOOLTIPS (APENAS HOVER)                      */
+/* =============================================== */
+/* Lógica: data-tooltip aparece em cima do botão */
+[data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 115%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1f2937;
+    color: white;
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    z-index: 100;
+    opacity: 0;
+    animation: fadeIn 0.2s forwards;
+    pointer-events: none;
+}
+
+[data-tooltip]:hover::before {
+    content: '';
+    position: absolute;
+    bottom: 105%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 5px;
+    border-style: solid;
+    border-color: #1f2937 transparent transparent transparent;
+    opacity: 0;
+    animation: fadeIn 0.2s forwards;
+}
+
+@keyframes fadeIn { to { opacity: 1; transform: translateX(-50%) translateY(-5px); } }
+
+/* =============================================== */
+/* 7. ESTADOS ESPECÍFICOS (GRAVANDO, ETC)          */
+/* =============================================== */
+
+/* Microfone Gravando */
+.btn-mic.recording {
+    background-color: var(--c-mic-rec);
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
     0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
     70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
     100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 }
 
-.btn-primary-large.recording {
-    background-color: #fef2f2;
-    color: var(--danger);
-    border: 2px solid var(--danger);
-    padding: calc(0.85rem - 2px);
-    animation: pulse-red 2s infinite;
-}
-.btn-primary-large.recording:hover { background-color: #fee2e2; }
-
-/* Botão Secundário */
-.btn-secondary {
-    background-color: white;
-    border: 1px solid #d1d5db; 
-    color: var(--text-main);
-    border-radius: var(--radius);
-    font-weight: 600;
-}
-.btn-secondary:hover { background-color: #f9fafb; border-color: #9ca3af; color: #111827; }
-
+/* Input de arquivo escondido */
 #fileInput { display: none; }
 
-.divider {
-    border: none;
-    border-top: 1px solid var(--border);
-    margin: 1.5rem 0;
-}
-
-/* =============================================== */
-/* GRADE DE FERRAMENTAS                            */
-/* =============================================== */
-.tools-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-    gap: 0.75rem;
-}
-
-.tool-btn {
-    padding: 0.75rem;
-    border-radius: 8px;
-    font-size: 0.9rem;
+/* Status de Feedback */
+.status-bar {
+    text-align: center;
+    font-size: 0.85rem;
+    height: 20px;
+    margin-bottom: 0.5rem;
+    color: var(--c-mic);
     font-weight: 500;
-    background: white;
-    border: 1px solid var(--border);
-    color: var(--text-muted);
-    box-shadow: var(--shadow-sm);
 }
+.status-bar.error { color: var(--c-clear); }
 
-.tool-btn svg { opacity: 0.7; transition: opacity 0.2s; }
-
-.tool-btn:hover { 
-    transform: translateY(-1px); 
-    box-shadow: var(--shadow-md);
-    border-color: var(--border-hover);
-    color: var(--text-main);
-}
-.tool-btn:hover svg { opacity: 1; }
-
-.tool-btn.magic:hover { color: #d97706; border-color: #fcd34d; background: #fffbeb; }
-.tool-btn.legal:hover { color: #2563eb; border-color: #bfdbfe; background: #eff6ff; }
-.tool-btn.action:hover { color: var(--primary); border-color: #c7d2fe; background: #eef2ff; }
-.tool-btn.danger { color: #b91c1c; border-color: #fecaca; background: #fff; }
-.tool-btn.danger:hover { background: #fef2f2; border-color: #f87171; }
+/* Ajuste Fino para Layout Compacto: Ordem dos botões */
+.container.minimized .btn-upload { order: 1; }
+.container.minimized .btn-magic  { order: 2; }
+.container.minimized .btn-mic    { order: 3; margin: 0 8px; } /* Destaque central */
+.container.minimized .btn-legal  { order: 4; }
+.container.minimized .btn-copy   { order: 5; }
+.container.minimized .btn-clear  { display: none; } /* Opcional: esconder limpar no modo mini para evitar acidentes, ou manter order:6 */
