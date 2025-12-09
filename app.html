@@ -27,8 +27,14 @@
             </div>
         </header>
         
-        <p class="subtitle">Sua voz textualizada com inteligência artificial e persistência de dados.</p>
+        <p class="subtitle">Sua voz textualizada com inteligência artificial local (Whisper) e persistência de dados.</p>
         
+        <!-- Barra de Progresso do Modelo (NOVO) -->
+        <div id="modelLoadingBar" class="progress-container" style="display:none;">
+            <div class="progress-label">Baixando cérebro neural (Whisper)... <span id="progressText">0%</span></div>
+            <div class="progress-bar"><div id="progressFill" style="width: 0%"></div></div>
+        </div>
+
         <!-- Área do Visualizador de Áudio (Canvas) -->
         <div class="visualizer-container">
             <canvas id="audioVisualizer" width="600" height="60"></canvas>
@@ -68,7 +74,7 @@
                 <span>Gravar</span>
             </button>
 
-            <!-- Botão Jurídico (ÍCONE ATUALIZADO: BALANÇA) -->
+            <!-- Botão Jurídico -->
             <button id="aiLegalBtn" class="btn-action btn-legal" data-tooltip="Converter para Juridiquês">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"></path>
@@ -94,7 +100,7 @@
         </div>
 
     </div>
-    <!-- Alteração Arquitetural: Importação como Módulo -->
+    <!-- Script Principal -->
     <script type="module" src="js/main.js"></script>
 </body>
 </html>
