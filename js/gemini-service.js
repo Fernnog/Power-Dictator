@@ -1,7 +1,7 @@
 export class GeminiService {
     constructor() {
         this.config = {
-            model: 'gemini-1.5-flash', // Atualizado para nomenclatura mais recente/estável
+            model: 'gemini-flash-latest', // Atualizado para nomenclatura mais recente/estável
             storageKeyApi: 'ditado_digital_gemini_key'
         };
     }
