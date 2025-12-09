@@ -47,19 +47,22 @@
 <body>
     <div class="launcher-container">
         <h1>Ditado Digital Pro v3.0</h1>
-        <p>Nova Engenharia de Áudio DSP e Modo Widget Flutuante.</p>
+        <p>Motor de Áudio DSP + Widget Flutuante (Canto Inferior Direito).</p>
         <button id="openAppBtn" class="launcher-button">Iniciar Widget</button>
     </div>
 
     <script>
         document.getElementById('openAppBtn').addEventListener('click', () => {
+            // Dimensões iniciais (Modo Expandido)
             const width = 920;
             const height = 800;
             
-            // Tenta calcular a posição Bottom-Right
+            // Cálculo para posicionar no canto INFERIOR DIREITO
+            // screen.availWidth desconta a barra de tarefas do Windows/Mac
             const left = window.screen.availWidth - width;
             const top = window.screen.availHeight - height;
 
+            // Abre a janela já na posição correta
             const windowFeatures = `width=${width},height=${height},left=${left},top=${top},popup=yes`;
             window.open('app.html', 'transcriptionApp', windowFeatures);
         });
