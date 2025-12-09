@@ -1,15 +1,17 @@
 /**
- * Classe auxiliar para renderizar o Osciloscópio
- * (Mantida da versão anterior, mas desacoplada do controle de fluxo)
+ * Classe interna para gerenciar o Canvas e o AudioContext (DSP)
  */
 class AudioVisualizer {
     constructor(canvasElement) {
         this.canvas = canvasElement;
         this.ctx = this.canvas.getContext('2d');
-        this.isActive = false;
+        this.audioContext = null;
         this.analyser = null;
         this.dataArray = null;
         this.animationId = null;
+        this.isActive = false;
+        
+        // Ajuste inicial de DPI
         this.resize();
         window.addEventListener('resize', () => this.resize());
     }
@@ -17,6 +19,7 @@ class AudioVisualizer {
     resize() {
         const dpr = window.devicePixelRatio || 1;
         const rect = this.canvas.getBoundingClientRect();
+        // Verifica se o elemento está visível antes de redimensionar
         if (rect.width > 0 && rect.height > 0) {
             this.canvas.width = rect.width * dpr;
             this.canvas.height = rect.height * dpr;
@@ -24,30 +27,51 @@ class AudioVisualizer {
         }
     }
 
-    setAnalyser(analyser) {
-        this.analyser = analyser;
-        this.analyser.fftSize = 256;
-        this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
-    }
+    async start(stream) {
+        if (this.isActive) return;
+        
+        try {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const source = this.audioContext.createMediaStreamSource(stream);
+            
+            // --- CADEIA DSP ---
+            
+            // 1. Filtro Passa-Alta (Remove ruídos graves/hum elétrico)
+            const filter = this.audioContext.createBiquadFilter();
+            filter.type = 'highpass';
+            filter.frequency.value = 85;
 
-    start() {
-        this.isActive = true;
-        this.draw();
-    }
+            // 2. Compressor (Nivela volume da voz)
+            const compressor = this.audioContext.createDynamicsCompressor();
+            compressor.threshold.value = -50;
+            compressor.knee.value = 40;
+            compressor.ratio.value = 12;
 
-    stop() {
-        this.isActive = false;
-        if (this.animationId) cancelAnimationFrame(this.animationId);
-        // Limpa o canvas
-        const width = this.canvas.width / (window.devicePixelRatio || 1);
-        const height = this.canvas.height / (window.devicePixelRatio || 1);
-        this.ctx.clearRect(0, 0, width, height);
+            // 3. Analisador (Para o visualizador)
+            this.analyser = this.audioContext.createAnalyser();
+            this.analyser.fftSize = 256;
+            this.analyser.smoothingTimeConstant = 0.5; // Resposta mais rápida visualmente
+
+            // Conexões
+            source.connect(filter);
+            filter.connect(compressor);
+            compressor.connect(this.analyser);
+            // Nota: Não conectamos ao destination para evitar feedback de áudio (eco)
+
+            this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+            this.isActive = true;
+            this.draw();
+            
+        } catch (e) {
+            console.error("Erro ao iniciar AudioVisualizer:", e);
+        }
     }
 
     draw() {
-        if (!this.isActive || !this.analyser) return;
+        if (!this.isActive) return;
         this.animationId = requestAnimationFrame(() => this.draw());
 
+        // Pega dados de frequência
         this.analyser.getByteFrequencyData(this.dataArray);
         
         const width = this.canvas.width / (window.devicePixelRatio || 1);
@@ -55,103 +79,105 @@ class AudioVisualizer {
         
         this.ctx.clearRect(0, 0, width, height);
 
+        // Configuração das barras
         const barWidth = (width / this.dataArray.length) * 2.5;
         let x = 0;
 
         for (let i = 0; i < this.dataArray.length; i++) {
             const value = this.dataArray[i];
             const percent = value / 255;
+            
+            // Ganho visual para tornar o efeito mais perceptível
             const barHeight = height * percent * 1.0; 
+            
+            // Cor baseada na amplitude (Azul -> Roxo)
             const hue = 220 + (percent * 40); 
             this.ctx.fillStyle = `hsl(${hue}, 80%, ${50 + (percent * 10)}%)`;
 
+            // Desenha barra arredondada
             if (barHeight > 2) {
                 this.ctx.fillRect(x, height - barHeight, barWidth - 1, barHeight);
             }
             x += barWidth;
         }
     }
+
+    stop() {
+        this.isActive = false;
+        cancelAnimationFrame(this.animationId);
+        if (this.audioContext && this.audioContext.state !== 'closed') {
+            this.audioContext.close();
+        }
+        const width = this.canvas.width / (window.devicePixelRatio || 1);
+        const height = this.canvas.height / (window.devicePixelRatio || 1);
+        this.ctx.clearRect(0, 0, width, height);
+    }
 }
 
 /**
- * Gerenciador de Áudio e Comunicação com Whisper Worker
+ * Classe Principal de Gerenciamento de Voz
  */
 export class SpeechManager {
     constructor(canvasElement, callbacks) {
-        this.callbacks = callbacks; // { onResult, onStatus, onError }
         this.visualizer = new AudioVisualizer(canvasElement);
+        this.callbacks = callbacks; // { onResult, onStatus, onError }
         
-        // Estado do Worker e Modelo
-        this.isModelReady = false;
-        this.worker = new Worker('js/whisper.worker.js', { type: 'module' });
-        this.initWorker();
-
-        // Estado do Áudio
-        this.audioContext = null;
-        this.stream = null;
-        this.processor = null;
-        this.input = null;
+        this.recognition = null;
         this.isRecording = false;
-
-        // Buffers e VAD (Voice Activity Detection)
-        this.audioBuffer = []; // Armazena floats de áudio
-        this.bufferSize = 4096;
-        this.sampleRate = 16000; // Whisper exige 16kHz
-        this.silenceStart = null;
-        this.vadThreshold = 0.015; // Sensibilidade do silêncio (ajustável)
-        this.maxSilenceDuration = 1500; // 1.5s de silêncio encerra a frase
+        this.stream = null;
+        this.manualStop = false;
+        this.currentText = ""; // Armazena o texto atual para formatação
+        
+        this.initSpeechAPI();
     }
 
-    initWorker() {
-        // Escuta mensagens do cérebro (Worker)
-        this.worker.onmessage = (e) => {
-            const { status, data, file, progress, text } = e.data;
-
-            if (status === 'progress') {
-                // Atualiza UI da barra de progresso
-                const barContainer = document.getElementById('modelLoadingBar');
-                const barFill = document.getElementById('progressFill');
-                const textLabel = document.getElementById('progressText');
-                
-                if (barContainer) barContainer.style.display = 'block';
-                if (data === 'Initiating') return; // Ignora msg inicial
-                
-                if (file && progress) {
-                    const pct = Math.round(progress);
-                    if (barFill) barFill.style.width = `${pct}%`;
-                    if (textLabel) textLabel.textContent = `${pct}%`;
-                }
-            }
-            
-            if (status === 'ready') {
-                this.isModelReady = true;
-                const barContainer = document.getElementById('modelLoadingBar');
-                if (barContainer) barContainer.style.display = 'none';
-                console.log("Whisper pronto para ouvir.");
-            }
-
-            if (status === 'result') {
-                if (text && text.trim().length > 0) {
-                    this.callbacks.onResult(text.trim(), ''); // Envia texto final
-                }
-                this.callbacks.onStatus('rec'); // Volta status para "ouvindo" (remove 'pensando')
-            }
-
-            if (status === 'error') {
-                this.callbacks.onError(data);
-            }
-        };
-
-        // Solicita carregamento do modelo
-        this.worker.postMessage({ type: 'load' });
-    }
-
-    async toggle(currentFullText) {
-        if (!this.isModelReady) {
-            this.callbacks.onError("Modelo carregando... aguarde.");
+    initSpeechAPI() {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            this.callbacks.onError("Navegador incompatível (Sem Speech API)");
             return;
         }
 
+        this.recognition = new SpeechRecognition();
+        this.recognition.lang = 'pt-BR';
+        this.recognition.continuous = true;
+        this.recognition.interimResults = true;
+
+        this.recognition.onstart = () => {
+            this.isRecording = true;
+            this.callbacks.onStatus('rec');
+        };
+
+        this.recognition.onend = () => {
+            // Lógica de resiliência: se não foi parada manual, tenta reiniciar
+            if (!this.manualStop && this.isRecording) {
+                try {
+                    this.recognition.start();
+                } catch (e) {
+                    console.log("Tentativa de reinício rápido ignorada.");
+                }
+            } else {
+                this.isRecording = false;
+                this.visualizer.stop();
+                this.stopStream();
+                this.callbacks.onStatus('idle');
+            }
+        };
+
+        this.recognition.onresult = (event) => this.handleResult(event);
+        
+        this.recognition.onerror = (event) => {
+            if (event.error === 'not-allowed') {
+                this.manualStop = true;
+                this.callbacks.onError("Acesso ao microfone negado.");
+            } else if (event.error !== 'no-speech') {
+                console.warn("Speech API Warning:", event.error);
+            }
+        };
+    }
+
+    async toggle(currentFullText) {
+        this.currentText = currentFullText; // Atualiza contexto
         if (this.isRecording) {
             this.stop();
         } else {
@@ -160,144 +186,87 @@ export class SpeechManager {
     }
 
     async start() {
+        this.manualStop = false;
         try {
-            this.callbacks.onStatus('rec'); // UI feedback
-            this.audioBuffer = []; // Limpa buffer anterior
-
-            // Inicializa AudioContext forçando 16kHz (requisito do Whisper)
-            // Navegadores modernos fazem resampling automático aqui
-            this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
-                sampleRate: this.sampleRate
-            });
-
+            // 1. Obtém o Stream de áudio PRIMEIRO (Crucial para o visualizador funcionar)
             this.stream = await navigator.mediaDevices.getUserMedia({ 
                 audio: { 
-                    channelCount: 1, 
                     echoCancellation: true, 
-                    noiseSuppression: true,
-                    autoGainControl: true
+                    noiseSuppression: true 
                 } 
             });
 
-            // Configuração do Grafo de Áudio
-            const source = this.audioContext.createMediaStreamSource(this.stream);
-            
-            // Analisador para o Visualizador
-            const analyser = this.audioContext.createAnalyser();
-            source.connect(analyser);
-            this.visualizer.setAnalyser(analyser);
-            this.visualizer.start();
+            // 2. Inicia o visualizador
+            await this.visualizer.start(this.stream);
 
-            // Processor para capturar dados crus (Raw Data)
-            // ScriptProcessor é depreciado mas é a forma mais simples de fazer isso
-            // num arquivo único sem carregar outro worklet file externo.
-            this.processor = this.audioContext.createScriptProcessor(this.bufferSize, 1, 1);
-            
-            // Loop de processamento de áudio
-            this.processor.onaudioprocess = (e) => this.processAudio(e);
-
-            // Conexões finais
-            // source -> analyser -> processor -> destination (mudo, necessário para o processor rodar)
-            analyser.connect(this.processor);
-            this.processor.connect(this.audioContext.destination);
-
-            this.isRecording = true;
+            // 3. Inicia o reconhecimento
+            this.recognition.start();
 
         } catch (err) {
-            console.error(err);
-            this.callbacks.onError("Erro ao iniciar microfone: " + err.message);
+            this.callbacks.onError("Erro ao acessar áudio: " + err.message);
         }
-    }
-
-    processAudio(event) {
-        if (!this.isRecording) return;
-
-        const inputData = event.inputBuffer.getChannelData(0);
-        
-        // 1. Detecção de Energia (RMS) para VAD
-        let sum = 0;
-        for (let i = 0; i < inputData.length; i++) {
-            sum += inputData[i] * inputData[i];
-            // Acumula áudio no buffer geral
-            this.audioBuffer.push(inputData[i]);
-        }
-        const rms = Math.sqrt(sum / inputData.length);
-
-        // 2. Lógica de Silêncio
-        if (rms > this.vadThreshold) {
-            // Há voz
-            this.silenceStart = null;
-        } else {
-            // Há silêncio
-            if (!this.silenceStart) this.silenceStart = Date.now();
-        }
-
-        // 3. Verifica se deve enviar para transcrição (Chunking)
-        if (this.silenceStart && (Date.now() - this.silenceStart > this.maxSilenceDuration)) {
-            // Se o buffer tiver dados suficientes (evitar cliques vazios)
-            if (this.audioBuffer.length > (this.sampleRate * 0.5)) { // Mínimo 0.5s de áudio
-                this.sendToWorker();
-            } else {
-                // Apenas ruído curto, descarta mas mantem gravação
-                this.audioBuffer = []; 
-                this.silenceStart = null; 
-            }
-        }
-        
-        // Segurança de memória: Se buffer ficar muito grande (>30s) força envio
-        if (this.audioBuffer.length > this.sampleRate * 30) {
-            this.sendToWorker();
-        }
-    }
-
-    sendToWorker() {
-        if (this.audioBuffer.length === 0) return;
-
-        // Feedback visual que está "pensando"
-        this.callbacks.onStatus('ai'); 
-
-        // Envia cópia do áudio para o Worker
-        const audioToSend = new Float32Array(this.audioBuffer);
-        this.worker.postMessage({
-            type: 'transcribe',
-            audio: audioToSend
-        });
-
-        // Limpa buffer e reseta VAD
-        this.audioBuffer = [];
-        this.silenceStart = null;
     }
 
     stop() {
-        this.isRecording = false;
-        
-        // Envia o que sobrou no buffer
-        if (this.audioBuffer.length > 0) {
-            this.sendToWorker();
-        }
-
-        // Para visualizador e stream
+        this.manualStop = true;
+        if (this.recognition) this.recognition.stop();
         this.visualizer.stop();
+        this.stopStream();
+    }
+
+    stopStream() {
         if (this.stream) {
             this.stream.getTracks().forEach(track => track.stop());
             this.stream = null;
         }
-        
-        // Desconecta nós de áudio
-        if (this.processor) {
-            this.processor.disconnect();
-            this.processor = null;
-        }
-        if (this.audioContext) {
-            this.audioContext.close();
-            this.audioContext = null;
-        }
-
-        this.callbacks.onStatus('idle');
     }
 
-    // Método mantido para compatibilidade, mas Whisper não usa contexto anterior para formatação interna
+    handleResult(event) {
+        let interimTranscript = '';
+        let finalTranscriptChunk = '';
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+                finalTranscriptChunk += event.results[i][0].transcript;
+            } else {
+                interimTranscript += event.results[i][0].transcript;
+            }
+        }
+
+        if (finalTranscriptChunk) {
+            // Aplica formatação básica (Capitalização) baseada no texto anterior
+            const formattedChunk = this.formatText(finalTranscriptChunk, this.currentText);
+            this.currentText += formattedChunk;
+            
+            // Envia texto final consolidado + interim
+            this.callbacks.onResult(this.currentText, interimTranscript);
+        } else {
+            // Apenas visualização do que está sendo dito agora
+            this.callbacks.onResult(this.currentText, interimTranscript);
+        }
+    }
+
+    formatText(newText, previousText) {
+        let clean = newText.trim();
+        if (!clean) return '';
+        
+        // Verifica o último caractere do texto existente
+        const lastChar = previousText.trim().slice(-1);
+        
+        // Decide se precisa de maiúscula (Início ou após pontuação)
+        const needsCap = previousText.length === 0 || ['.', '!', '?', '\n'].includes(lastChar);
+        
+        if (needsCap) {
+            clean = clean.charAt(0).toUpperCase() + clean.slice(1);
+        }
+        
+        // Adiciona espaço se necessário
+        const needsSpace = previousText.length > 0 && !['\n'].includes(previousText.slice(-1));
+        return (needsSpace ? ' ' : '') + clean;
+    }
+
+    // Permite atualizar o texto base caso o usuário digite manualmente
     updateContext(text) {
-        // Placeholder
+        this.currentText = text;
     }
 }
