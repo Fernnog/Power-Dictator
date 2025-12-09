@@ -15,7 +15,8 @@ document.addEventListener('DOMContentLoaded', () => {
         iconMinimize: document.getElementById('iconMinimize'),
         iconMaximize: document.getElementById('iconMaximize'),
         textarea: document.getElementById('transcriptionArea'),
-        micBtn: document.getElementById('micBtn'),
+        micBtn: document.getElementById('micBtn'), // Botão Grande
+        headerMicBtn: document.getElementById('headerMicBtn'), // Botão Header
         micLabel: document.querySelector('#micBtn span'),
         badge: document.getElementById('recordingIndicator'),
         visualizerBars: document.querySelectorAll('.audio-visualizer .bar'),
@@ -30,7 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // =========================================================================
-    // LÓGICA DE UI: MODO COMPACTO (COM REDIMENSIONAMENTO DE JANELA)
+    // LÓGICA DE UI: MODO COMPACTO (COM REDIMENSIONAMENTO AGRESSIVO)
     // =========================================================================
     ui.toggleSizeBtn.addEventListener('click', () => {
         ui.container.classList.toggle('minimized');
@@ -42,9 +43,8 @@ document.addEventListener('DOMContentLoaded', () => {
             ui.iconMaximize.style.display = 'block';
             ui.toggleSizeBtn.title = "Expandir";
             
-            // Tenta redimensionar a janela física (funciona se aberto via Launcher)
-            // Largura 540px (pra caber o container de 500px com folga) x Altura 500px
-            try { window.resizeTo(540, 500); } catch(e) { console.log("Resize bloqueado pelo navegador"); }
+            // Redimensiona agressivamente (sem barra de ferramentas e sem botão grande)
+            try { window.resizeTo(540, 320); } catch(e) { console.log("Resize bloqueado"); }
 
         } else {
             // MODO EXPANDIDO
@@ -52,8 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ui.iconMaximize.style.display = 'none';
             ui.toggleSizeBtn.title = "Modo Compacto";
 
-            // Restaura o tamanho original definido no index.html
-            try { window.resizeTo(740, 780); } catch(e) { console.log("Resize bloqueado pelo navegador"); }
+            try { window.resizeTo(740, 780); } catch(e) { console.log("Resize bloqueado"); }
         }
     });
 
@@ -119,8 +118,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         handleStart() {
             this.isRecording = true;
+            
+            // Atualiza Botão Grande
             ui.micBtn.classList.add('recording');
             ui.micLabel.textContent = "Parar Gravação";
+            
+            // Atualiza Botão Header
+            ui.headerMicBtn.classList.add('recording');
+            ui.headerMicBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`; // Ícone de Pause
+            
             ui.badge.classList.remove('hidden');
             ui.statusMsg.textContent = "🎙️ Ouvindo com atenção...";
             ui.statusMsg.style.color = "var(--primary)";
@@ -133,8 +139,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     setTimeout(() => { if(this.shouldRestart) this.recognition.start() }, 500);
                 }
             } else {
+                // Reset Botão Grande
                 ui.micBtn.classList.remove('recording');
                 ui.micLabel.textContent = "Iniciar Gravação";
+                
+                // Reset Botão Header
+                ui.headerMicBtn.classList.remove('recording');
+                ui.headerMicBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>`;
+
                 ui.badge.classList.add('hidden');
                 ui.statusMsg.textContent = "";
                 this.stopAudioVisualizer();
@@ -296,8 +308,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- EVENTOS DE UI ---
-
+    
+    // Listener do Botão Grande
     ui.micBtn.addEventListener('click', () => dictation.toggle());
+    
+    // Listener do Botão Header (Novo)
+    ui.headerMicBtn.addEventListener('click', () => dictation.toggle());
 
     ui.textarea.addEventListener('input', () => {
         if (dictation.isMachineTyping) return;
