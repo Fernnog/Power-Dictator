@@ -71,12 +71,9 @@ body {
 .container.minimized .btn-upload, 
 .container.minimized .btn-legal,  
 .container.minimized .btn-copy,
-.container.minimized .status-bar,
-.container.minimized #modelLoadingBar { /* Esconde barra de progresso no mini se já carregado */
+.container.minimized .status-bar { 
     display: none !important;
 }
-
-/* Se estiver carregando no modo mini, podemos forçar display block via JS, ou deixar oculto */
 
 .container.minimized .app-header {
     margin-bottom: 0;
@@ -151,45 +148,6 @@ canvas#audioVisualizer {
     z-index: 10;
 }
 .btn-toggle-size:hover { background: #f3f4f6; color: var(--text-main); }
-
-/* =============================================== */
-/* 3.1 BARRA DE PROGRESSO (WHISPER) - NOVO         */
-/* =============================================== */
-.progress-container {
-    width: 100%;
-    margin-bottom: 1rem;
-    background: #f9fafb;
-    padding: 12px 16px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    box-sizing: border-box;
-    display: none; /* Controlado via JS */
-    animation: fadeIn 0.3s ease;
-}
-
-.progress-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-    font-size: 0.85rem;
-    color: var(--text-main);
-    font-weight: 500;
-}
-
-.progress-bar-track {
-    height: 6px;
-    background-color: #e5e7eb;
-    border-radius: 3px;
-    overflow: hidden;
-}
-
-.progress-bar-fill {
-    height: 100%;
-    background-color: var(--c-mic);
-    width: 0%;
-    transition: width 0.2s ease;
-}
 
 /* =============================================== */
 /* 4. ÁREA DE TEXTO (EDITOR)                       */
@@ -319,23 +277,6 @@ textarea {
     animation: spin 0.8s linear infinite;
 }
 
-.status-bar.status-processing {
-    background-color: #fef3c7;
-    color: #d97706;
-    border: 1px solid #fcd34d;
-}
-
-.status-bar.status-processing::before {
-    content: '';
-    display: block;
-    width: 12px;
-    height: 12px;
-    border: 2px solid rgba(217, 119, 6, 0.3);
-    border-radius: 50%;
-    border-top-color: #d97706;
-    animation: spin 0.8s linear infinite;
-}
-
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .status-bar.status-success {
@@ -391,13 +332,6 @@ textarea {
     white-space: nowrap;
 }
 
-.btn-action:disabled {
-    background-color: #9ca3af !important;
-    cursor: not-allowed;
-    transform: none !important;
-    box-shadow: none;
-}
-
 .btn-action svg {
     width: 20px;
     height: 20px;
@@ -412,7 +346,7 @@ textarea {
 .btn-copy   { background-color: var(--c-copy); color: white;}
 .btn-clear  { background-color: white; color: var(--c-clear); border: 1px solid #fecaca; }
 
-.btn-action:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.08); }
+.btn-action:hover { transform: translateY(-2px); filter: brightness(1.08); }
 .btn-clear:hover { background-color: #fef2f2; }
 
 .btn-mic.recording {
