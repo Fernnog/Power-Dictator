@@ -4,7 +4,7 @@
 :root {
     /* Cores Funcionais */
     --c-mic: #4f46e5;      /* Indigo */
-    --c-mic-rec: #ef4444;  /* Red Pulse */
+    --c-mic-active: #ef4444; /* Red - Gravação Ativa */
     --c-upload: #8b5cf6;   /* Violet */
     --c-magic: #f59e0b;    /* Amber */
     --c-legal: #0ea5e9;    /* Sky Blue */
@@ -20,7 +20,6 @@
     
     /* Sombras & Radius */
     --shadow-soft: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-    --shadow-hover: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
     --radius: 16px;
     --btn-radius: 12px;
 }
@@ -43,7 +42,6 @@ body {
 .container {
     background-color: var(--bg-card);
     width: 100%;
-    /* Aumentado para 950px para garantir que não corte em telas menores */
     max-width: 950px; 
     height: 90vh;
     border-radius: var(--radius);
@@ -56,23 +54,20 @@ body {
     position: relative;
 }
 
-/* --- MODO COMPACTO (Widget Quadrado) --- */
 .container.minimized {
     padding: 1rem;
     border-radius: 0;
     background: rgba(255, 255, 255, 0.99);
-    /* Removemos a altura fixa aqui, deixamos o JS controlar a janela */
 }
 
-/* Ocultar elementos desnecessários no modo compacto */
 .container.minimized .header-title,
 .container.minimized .badge-pro,
 .container.minimized .subtitle,
-.container.minimized .editor-footer {
+.container.minimized .editor-footer,
+.container.minimized .visualizer-container { /* Esconde visualizador no modo mini */
     display: none;
 }
 
-/* Ajuste do Header no modo compacto para manter apenas o botão de expandir */
 .container.minimized .app-header {
     margin-bottom: 0;
     height: 0;
@@ -80,13 +75,13 @@ body {
 }
 
 /* =============================================== */
-/* 3. HEADER                                       */
+/* 3. HEADER & VISUALIZER                          */
 /* =============================================== */
 .app-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1rem;
+    margin-bottom: 0.5rem;
 }
 
 .header-title h1 {
@@ -111,10 +106,27 @@ body {
 .subtitle {
     color: var(--text-muted);
     font-size: 0.95rem;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
 }
 
-/* Botão de redimensionar */
+/* NOVO: Container do Canvas */
+.visualizer-container {
+    width: 100%;
+    height: 60px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 1rem;
+    background: #f9fafb;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+canvas#audioVisualizer {
+    width: 100%;
+    height: 100%;
+}
+
 .btn-toggle-size {
     position: absolute;
     top: 1rem;
@@ -140,7 +152,7 @@ body {
     border: 1px solid var(--border);
     border-radius: var(--radius);
     transition: all 0.3s;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
     overflow: hidden;
 }
 
@@ -175,9 +187,8 @@ textarea {
     background: #fff;
 }
 
-/* Ajustes Editor Modo Compacto */
 .container.minimized .editor-area {
-    margin-top: 1.5rem; /* Espaço para o botão de maximizar */
+    margin-top: 1.5rem;
     margin-bottom: 0.8rem;
     border-radius: 12px;
     background: #fff;
@@ -195,33 +206,30 @@ textarea {
 .control-dock {
     display: flex;
     align-items: center;
-    gap: 10px; /* Reduzi levemente o gap para caber melhor */
+    gap: 10px;
     padding: 0.5rem;
     transition: all 0.3s ease;
 }
 
-/* --- ESTILO EXPANDIDO --- */
 .btn-action {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
-    /* Ajuste de Padding: 12px vert, 16px horiz (era 20px) para economizar espaço lateral */
     padding: 12px 16px; 
     border-radius: var(--btn-radius);
     border: none;
     font-weight: 600;
-    font-size: 0.9rem; /* Leve redução na fonte */
+    font-size: 0.9rem;
     cursor: pointer;
     transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
     color: white;
     flex: 1; 
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     position: relative;
-    white-space: nowrap; /* Impede quebra de texto */
+    white-space: nowrap;
 }
 
-/* Ícones */
 .btn-action svg {
     width: 20px;
     height: 20px;
@@ -229,7 +237,6 @@ textarea {
     flex-shrink: 0;
 }
 
-/* Cores */
 .btn-mic    { background-color: var(--c-mic); flex: 1.5; }
 .btn-upload { background-color: var(--c-upload); color: white;}
 .btn-magic  { background-color: var(--c-magic); color: white;}
@@ -240,25 +247,30 @@ textarea {
 .btn-action:hover { transform: translateY(-2px); filter: brightness(1.08); }
 .btn-clear:hover { background-color: #fef2f2; }
 
+/* Estado Gravando (Visual Simples no botão) */
+.btn-mic.recording {
+    background-color: var(--c-mic-active);
+    /* Removemos o pulse complexo pois temos o visualizador agora */
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.2);
+}
 
-/* --- MODO COMPACTO (Transformação) --- */
 .container.minimized .control-dock {
-    justify-content: center; /* Centraliza os botões no novo espaço quadrado */
+    justify-content: center;
     gap: 8px;
     padding: 0;
-    flex-wrap: nowrap; /* Garante uma linha única */
+    flex-wrap: nowrap;
 }
 
 .container.minimized .btn-action {
     flex: 0 0 auto; 
-    width: 44px; /* Botões levemente maiores para toque fácil */
+    width: 44px;
     height: 44px;
     padding: 0;
     border-radius: 50%;
 }
 
 .container.minimized .btn-mic {
-    width: 58px; /* Destaque central */
+    width: 58px;
     height: 58px;
     order: 3; 
     margin: 0 4px;
@@ -299,17 +311,6 @@ textarea {
 }
 
 @keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(5px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
-
-.btn-mic.recording {
-    background-color: var(--c-mic-rec);
-    animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-    0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-    70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
-}
 
 #fileInput { display: none; }
 
