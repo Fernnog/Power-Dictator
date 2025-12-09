@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // CONFIGURAÇÕES GERAIS
     // =========================================================================
     const CONFIG = {
-        geminiModel: 'gemini-flash-latest', 
+        geminiModel: 'gemini-1.5-flash', 
         storageKeyText: 'ditado_backup_text',
         storageKeyApi: 'ditado_digital_gemini_key'
     };
@@ -31,28 +31,55 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // =========================================================================
-    // LÓGICA DE UI: MODO COMPACTO (COM REDIMENSIONAMENTO AGRESSIVO)
+    // LÓGICA DE UI: MODO COMPACTO + ANCORAGEM NO CANTO
     // =========================================================================
     ui.toggleSizeBtn.addEventListener('click', () => {
         ui.container.classList.toggle('minimized');
         const isMinimized = ui.container.classList.contains('minimized');
         
+        // Definição das Dimensões
+        const compactW = 500;
+        const compactH = 320; // Altura enxuta para não ocupar espaço vertical
+        
+        const normalW = 740;
+        const normalH = 780;
+
         if (isMinimized) {
-            // MODO COMPACTO
+            // --- ATIVAR MODO COMPACTO ---
             ui.iconMinimize.style.display = 'none';
             ui.iconMaximize.style.display = 'block';
-            ui.toggleSizeBtn.title = "Expandir";
+            ui.toggleSizeBtn.title = "Expandir e Centralizar";
             
-            // Redimensiona agressivamente (sem barra de ferramentas e sem botão grande)
-            try { window.resizeTo(540, 320); } catch(e) { console.log("Resize bloqueado"); }
+            try {
+                // 1. Redimensiona para o tamanho pequeno exato
+                window.resizeTo(compactW, compactH);
+                
+                // 2. Calcula posição Canto Inferior Direito
+                // screen.availWidth = Largura total disponível do monitor
+                const xPos = window.screen.availWidth - compactW; 
+                const yPos = window.screen.availHeight - compactH;
+                
+                // 3. Move a janela
+                window.moveTo(xPos, yPos);
+            } catch(e) { console.log("Movimento bloqueado pelo navegador"); }
 
         } else {
-            // MODO EXPANDIDO
+            // --- VOLTAR AO MODO NORMAL ---
             ui.iconMinimize.style.display = 'block';
             ui.iconMaximize.style.display = 'none';
-            ui.toggleSizeBtn.title = "Modo Compacto";
+            ui.toggleSizeBtn.title = "Modo Compacto (Canto Inferior)";
 
-            try { window.resizeTo(740, 780); } catch(e) { console.log("Resize bloqueado"); }
+            try {
+                // 1. Redimensiona para tamanho padrão
+                window.resizeTo(normalW, normalH);
+                
+                // 2. Calcula o Centro da Tela
+                const xCenter = (window.screen.availWidth - normalW) / 2;
+                const yCenter = (window.screen.availHeight - normalH) / 2;
+
+                // 3. Centraliza a janela novamente
+                window.moveTo(xCenter, yCenter);
+            } catch(e) { console.log("Movimento bloqueado pelo navegador"); }
         }
     });
 
@@ -125,7 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Atualiza Botão Header
             ui.headerMicBtn.classList.add('recording');
-            ui.headerMicBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`; // Ícone de Pause
+            ui.headerMicBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`; 
             
             ui.badge.classList.remove('hidden');
             ui.statusMsg.textContent = "🎙️ Ouvindo com atenção...";
@@ -139,11 +166,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     setTimeout(() => { if(this.shouldRestart) this.recognition.start() }, 500);
                 }
             } else {
-                // Reset Botão Grande
+                // Reset Botões
                 ui.micBtn.classList.remove('recording');
                 ui.micLabel.textContent = "Iniciar Gravação";
-                
-                // Reset Botão Header
                 ui.headerMicBtn.classList.remove('recording');
                 ui.headerMicBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>`;
 
@@ -271,7 +296,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const dictation = new DictationEngine();
 
     // =========================================================================
-    // SERVIÇOS DE IA (GEMINI)
+    // SERVIÇOS DE IA
     // =========================================================================
     function getApiKey() {
         let key = localStorage.getItem(CONFIG.storageKeyApi);
@@ -295,7 +320,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify(payload)
             });
             const data = await response.json();
-            
             if (data.error) throw new Error(data.error.message);
 
             ui.statusMsg.textContent = "✅ Concluído!";
@@ -307,12 +331,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- EVENTOS DE UI ---
-    
-    // Listener do Botão Grande
+    // Listeners
     ui.micBtn.addEventListener('click', () => dictation.toggle());
-    
-    // Listener do Botão Header (Novo)
     ui.headerMicBtn.addEventListener('click', () => dictation.toggle());
 
     ui.textarea.addEventListener('input', () => {
@@ -343,15 +363,11 @@ document.addEventListener('DOMContentLoaded', () => {
     ui.fileInput.addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        
-        if (file.size > 10 * 1024 * 1024) {
-             dictation.showError("Arquivo muito grande. Tente arquivos menores que 10MB.");
-             return;
-        }
+        if (file.size > 10 * 1024 * 1024) return dictation.showError("Arquivo muito grande. Limite 10MB.");
 
         const reader = new FileReader();
         reader.readAsDataURL(file);
-        ui.statusMsg.textContent = "📂 Lendo áudio e enviando...";
+        ui.statusMsg.textContent = "📂 Lendo áudio...";
         reader.onloadend = async () => {
             const base64Data = reader.result.split(',')[1];
             const result = await callGemini({
@@ -374,8 +390,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (result) dictation.manualUpdate(result);
     };
 
-    ui.btnAiFix.addEventListener('click', () => runAiTool("Corrija gramática, pontuação e melhore a fluidez mantendo o sentido original:"));
-    ui.btnAiLegal.addEventListener('click', () => runAiTool("Reescreva o texto abaixo em linguagem jurídica formal (juridiquês), adequada para petições:"));
+    ui.btnAiFix.addEventListener('click', () => runAiTool("Corrija gramática, pontuação e fluidez:"));
+    ui.btnAiLegal.addEventListener('click', () => runAiTool("Reescreva em linguagem jurídica formal:"));
 
     function updateCharCount() {
         ui.charCount.textContent = `${ui.textarea.value.length} caracteres`;
