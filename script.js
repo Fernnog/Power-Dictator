@@ -1,65 +1,309 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Referências aos elementos do DOM
-    const elements = {
-        transcriptionArea: document.getElementById('transcriptionArea'),
+    // =========================================================================
+    // CONFIGURAÇÕES GERAIS
+    // =========================================================================
+    const CONFIG = {
+        geminiModel: 'gemini-1.5-flash', 
+        storageKeyText: 'ditado_backup_text', // Chave para salvar texto
+        storageKeyApi: 'ditado_digital_gemini_key' // Chave para salvar API Key
+    };
+
+    // Referências de UI
+    const ui = {
+        textarea: document.getElementById('transcriptionArea'),
         micBtn: document.getElementById('micBtn'),
-        copyBtn: document.getElementById('copyBtn'),
-        clearBtn: document.getElementById('clearBtn'),
-        fileInput: document.getElementById('fileInput'),
-        aiFixBtn: document.getElementById('aiFixBtn'),
-        aiLegalBtn: document.getElementById('aiLegalBtn'),
+        micLabel: document.querySelector('#micBtn span'),
+        badge: document.getElementById('recordingIndicator'),
+        visualizerBars: document.querySelectorAll('.audio-visualizer .bar'),
+        charCount: document.getElementById('charCount'),
         statusMsg: document.getElementById('statusMsg'),
-        // Novos elementos da UI aprimorada
-        recordingIndicator: document.getElementById('recordingIndicator'),
-        charCount: document.getElementById('charCount')
+        saveStatus: document.getElementById('saveStatus'),
+        // Botões de Ação
+        btnCopy: document.getElementById('copyBtn'),
+        btnClear: document.getElementById('clearBtn'),
+        btnAiFix: document.getElementById('aiFixBtn'),
+        btnAiLegal: document.getElementById('aiLegalBtn'),
+        fileInput: document.getElementById('fileInput')
     };
 
-    // Configurações do Gemini
-    const GEMINI_CONFIG = {
-        model: 'gemini-flash-latest', 
-        keyStorage: 'ditado_digital_gemini_key'
-    };
+    // =========================================================================
+    // CLASSE DO MOTOR DE DITADO (VUI ENGINE)
+    // =========================================================================
+    class DictationEngine {
+        constructor() {
+            this.recognition = null;
+            this.isRecording = false;
+            this.shouldRestart = false; // "Infinity Mode" flag
+            this.audioContext = null;
+            this.analyser = null;
+            this.mediaStream = null;
+            this.finalText = ui.textarea.value || '';
+            
+            // Inicialização
+            this.initSpeechAPI();
+            this.loadFromCache(); 
+        }
 
-    // --- FUNÇÕES AUXILIARES ---
+        // Configura a API nativa do navegador
+        initSpeechAPI() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            
+            if (!SpeechRecognition) {
+                alert("Seu navegador não suporta a Web Speech API nativa. Recomendamos usar o Google Chrome.");
+                ui.micBtn.disabled = true;
+                ui.micLabel.textContent = "Navegador incompatível";
+                return;
+            }
 
-    function updateStatus(msg) {
-        elements.statusMsg.textContent = msg;
-    }
+            this.recognition = new SpeechRecognition();
+            this.recognition.lang = 'pt-BR';
+            this.recognition.continuous = true; // Permite fluxo contínuo
+            this.recognition.interimResults = true; // Resultados parciais (streaming de texto)
 
-    // Atualiza o contador de caracteres
-    function updateCharCount() {
-        const count = elements.transcriptionArea.value.length;
-        elements.charCount.textContent = `${count} caracteres`;
-    }
+            // Bindings de eventos
+            this.recognition.onstart = () => this.handleStart();
+            this.recognition.onend = () => this.handleEnd();
+            this.recognition.onresult = (e) => this.handleResult(e);
+            this.recognition.onerror = (e) => this.handleError(e);
+        }
 
-    // Listener para contar caracteres enquanto digita
-    elements.transcriptionArea.addEventListener('input', updateCharCount);
-
-    // Gerenciamento da API Key
-    function getApiKey() {
-        let key = localStorage.getItem(GEMINI_CONFIG.keyStorage);
-        if (!key) {
-            key = prompt("🔑 Para usar IA e Transcrição de Arquivos, insira sua Google Gemini API Key:");
-            if (key && key.trim().length > 10) {
-                localStorage.setItem(GEMINI_CONFIG.keyStorage, key.trim());
+        // Alterna entre gravar e parar
+        toggle() {
+            if (this.isRecording) {
+                this.stop();
             } else {
-                alert("Chave API necessária para esta funcionalidade.");
-                updateStatus("Chave API não fornecida.");
+                this.start();
+            }
+        }
+
+        start() {
+            this.shouldRestart = true; // Ativa modo infinito
+            try {
+                this.recognition.start();
+            } catch (e) {
+                console.warn("Tentativa de iniciar com motor já ativo:", e);
+            }
+            this.startAudioVisualizer(); // Inicia visualizador de ondas
+        }
+
+        stop() {
+            this.shouldRestart = false; // Desativa modo infinito (parada manual)
+            this.recognition.stop();
+            this.stopAudioVisualizer();
+            this.saveToCache(); // Force save
+        }
+
+        // --- HANDLERS DE EVENTOS DO SPEECH API ---
+
+        handleStart() {
+            this.isRecording = true;
+            ui.micBtn.classList.add('recording');
+            ui.micLabel.textContent = "Parar Gravação";
+            ui.badge.classList.remove('hidden');
+            ui.statusMsg.textContent = "🎙️ Motor ativo. Pode falar continuamente.";
+            ui.statusMsg.style.color = "var(--primary)";
+        }
+
+        handleEnd() {
+            this.isRecording = false;
+            
+            // LÓGICA CRÍTICA: AUTO-RESTART (INFINITY LOOP)
+            // Se o navegador cortar o áudio (comum no Chrome após 60s), mas o usuário
+            // não clicou em parar, nós reiniciamos imediatamente.
+            if (this.shouldRestart) {
+                console.log("Reiniciando fluxo de reconhecimento (Infinity Mode)...");
+                try {
+                    this.recognition.start();
+                } catch(e) {
+                    setTimeout(() => { if(this.shouldRestart) this.recognition.start() }, 500);
+                }
+            } else {
+                // Parada real solicitada pelo usuário
+                ui.micBtn.classList.remove('recording');
+                ui.micLabel.textContent = "Iniciar Gravação";
+                ui.badge.classList.add('hidden');
+                ui.statusMsg.textContent = "Gravação finalizada.";
+                this.stopAudioVisualizer();
+            }
+        }
+
+        handleResult(event) {
+            let interimTranscript = '';
+            
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    this.finalText += this.formatText(event.results[i][0].transcript);
+                } else {
+                    interimTranscript += event.results[i][0].transcript;
+                }
+            }
+
+            // Atualiza textarea: Texto Consolidado + Texto Provisório (em itálico visualmente se quisesse, aqui é texto puro)
+            ui.textarea.value = this.finalText + interimTranscript;
+            
+            // Auto-scroll para o final
+            ui.textarea.scrollTop = ui.textarea.scrollHeight;
+            updateCharCount();
+            
+            // Salva no cache apenas quando temos um resultado parcial ou final
+            // Se for final, salva com certeza.
+            this.saveToCache(); 
+        }
+
+        handleError(event) {
+            console.error("Erro VUI:", event.error);
+            
+            // Ignora erros comuns que não impedem o uso
+            if (event.error === 'no-speech') return; // Apenas silêncio
+            if (event.error === 'aborted') return;   // Parada manual
+            
+            if (event.error === 'not-allowed') {
+                alert("Permissão de microfone negada. Verifique as configurações do navegador.");
+                this.shouldRestart = false;
+                this.handleEnd();
+            } else {
+                ui.statusMsg.textContent = `Erro no motor: ${event.error}`;
+                ui.statusMsg.style.color = "var(--danger)";
+            }
+        }
+
+        // --- FORMATADORES & HELPERS ---
+
+        formatText(text) {
+            let clean = text.trim();
+            if (!clean) return '';
+            
+            // Lógica simples de capitalização baseada no fim do texto anterior
+            // Se o texto anterior termina em . ! ou ?, o próximo começa maiúsculo
+            if (this.finalText.length > 0) {
+                const lastChar = this.finalText.trim().slice(-1);
+                if (['.', '!', '?'].includes(lastChar)) {
+                    clean = clean.charAt(0).toUpperCase() + clean.slice(1);
+                }
+            } else {
+                // Primeira frase do documento
+                clean = clean.charAt(0).toUpperCase() + clean.slice(1);
+            }
+            return ' ' + clean;
+        }
+
+        // --- PERSISTÊNCIA (LOCALSTORAGE) ---
+
+        saveToCache() {
+            localStorage.setItem(CONFIG.storageKeyText, ui.textarea.value);
+            // Atualiza estado interno se o textarea foi modificado externamente (ex: digitação)
+            this.finalText = ui.textarea.value; 
+            
+            ui.saveStatus.textContent = "Salvando...";
+            setTimeout(() => ui.saveStatus.textContent = "Sincronizado", 800);
+        }
+
+        loadFromCache() {
+            const saved = localStorage.getItem(CONFIG.storageKeyText);
+            if (saved) {
+                ui.textarea.value = saved;
+                this.finalText = saved;
+                updateCharCount();
+            }
+        }
+
+        // Método para atualizar o estado quando a IA ou Upload modificam o texto
+        manualUpdate(newText) {
+            ui.textarea.value = newText;
+            this.finalText = newText;
+            updateCharCount();
+            this.saveToCache();
+        }
+
+        // --- VISUALIZADOR DE ÁUDIO (WEB AUDIO API) ---
+        
+        async startAudioVisualizer() {
+            try {
+                // Solicita stream de áudio SOMENTE para visualização (não interfere no reconhecimento)
+                this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                this.analyser = this.audioContext.createAnalyser();
+                const source = this.audioContext.createMediaStreamSource(this.mediaStream);
+                
+                source.connect(this.analyser);
+                this.analyser.fftSize = 64; // Tamanho pequeno para performance (32 bins)
+                
+                const bufferLength = this.analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+
+                const updateBars = () => {
+                    if (!this.isRecording) return;
+                    
+                    this.analyser.getByteFrequencyData(dataArray);
+                    
+                    // Mapeia frequências para as 4 barras
+                    // Índices arbitrários para pegar graves, médios e agudos
+                    const v1 = dataArray[2]; 
+                    const v2 = dataArray[6];
+                    const v3 = dataArray[12];
+                    const v4 = dataArray[20];
+
+                    // Aplica altura com limite máximo de 14px (altura do container) e mínimo de 4px
+                    const normalize = (val) => Math.max(4, Math.min(14, val / 10));
+
+                    ui.visualizerBars[0].style.height = `${normalize(v1)}px`;
+                    ui.visualizerBars[1].style.height = `${normalize(v2)}px`;
+                    ui.visualizerBars[2].style.height = `${normalize(v3)}px`;
+                    ui.visualizerBars[3].style.height = `${normalize(v4)}px`;
+
+                    requestAnimationFrame(updateBars);
+                };
+                
+                updateBars();
+
+            } catch (err) {
+                console.warn("Visualizador de áudio falhou ao iniciar (possível restrição de permissão):", err);
+            }
+        }
+
+        stopAudioVisualizer() {
+            if (this.mediaStream) {
+                this.mediaStream.getTracks().forEach(track => track.stop());
+            }
+            if (this.audioContext && this.audioContext.state !== 'closed') {
+                this.audioContext.close();
+            }
+            // Reseta visual das barras
+            ui.visualizerBars.forEach(bar => bar.style.height = '4px');
+        }
+    }
+
+    // Instancia o motor
+    const dictation = new DictationEngine();
+
+    // =========================================================================
+    // SERVIÇOS DE IA (GEMINI)
+    // =========================================================================
+
+    function getApiKey() {
+        let key = localStorage.getItem(CONFIG.storageKeyApi);
+        if (!key) {
+            key = prompt("🔑 Para usar recursos de IA, insira sua Google Gemini API Key:");
+            if (key && key.trim().length > 10) {
+                localStorage.setItem(CONFIG.storageKeyApi, key.trim());
+            } else {
+                alert("Chave API necessária.");
                 return null;
             }
         }
         return key;
     }
 
-    // Chamada Genérica à API do Gemini
     async function callGemini(payload) {
         const apiKey = getApiKey();
         if (!apiKey) return null;
 
-        updateStatus("🤖 Processando com Inteligência Artificial...");
+        ui.statusMsg.textContent = "🤖 IA Processando...";
+        ui.statusMsg.style.color = "var(--primary)";
         
         try {
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_CONFIG.model}:generateContent?key=${apiKey}`, {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${CONFIG.geminiModel}:generateContent?key=${apiKey}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -67,199 +311,124 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!response.ok) {
                 if (response.status === 400 || response.status === 403) {
-                    localStorage.removeItem(GEMINI_CONFIG.keyStorage); 
-                    throw new Error("Chave API inválida ou expirada.");
+                    localStorage.removeItem(CONFIG.storageKeyApi); // Remove chave inválida
+                    throw new Error("Chave API inválida/expirada. Tente novamente.");
                 }
-                throw new Error(`Erro API: ${response.status}`);
+                throw new Error(`Erro HTTP: ${response.status}`);
             }
             
             const data = await response.json();
             
             if (!data.candidates || !data.candidates[0].content) {
-                throw new Error("A IA não retornou conteúdo válido.");
+                throw new Error("Resposta da IA vazia.");
             }
 
-            updateStatus(""); 
+            ui.statusMsg.textContent = "✅ IA Concluída!";
+            setTimeout(() => ui.statusMsg.textContent = "", 2000);
+            
             return data.candidates[0].content.parts[0].text.trim();
 
         } catch (error) {
             console.error(error);
-            updateStatus(`❌ Erro: ${error.message}`);
-            alert(`Ocorreu um erro: ${error.message}`);
+            ui.statusMsg.textContent = `❌ Erro IA: ${error.message}`;
+            ui.statusMsg.style.color = "var(--danger)";
+            alert(`Falha na IA: ${error.message}`);
             return null;
         }
     }
 
-    // --- FUNCIONALIDADE 1: WEB SPEECH API (Microfone) ---
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    
-    if (!SpeechRecognition) {
-        alert("Seu navegador não suporta a API de reconhecimento de voz nativa.");
-        elements.micBtn.disabled = true;
-        elements.micBtn.textContent = "Não suportado";
-    } else {
-        const recognition = new SpeechRecognition();
-        recognition.lang = 'pt-BR';
-        recognition.interimResults = true;
-        recognition.continuous = true;
+    // --- AÇÕES DE BOTÕES E LISTENERS ---
 
-        let isRecording = false;
-        let finalTranscript = '';
+    // 1. Gravação
+    ui.micBtn.addEventListener('click', () => dictation.toggle());
 
-        elements.micBtn.addEventListener('click', () => {
-            isRecording = !isRecording;
-            if (isRecording) {
-                // Captura texto existente
-                finalTranscript = elements.transcriptionArea.value; 
-                if (finalTranscript && !/[\s\n]$/.test(finalTranscript)) {
-                    finalTranscript += ' ';
-                }
-                
-                recognition.start();
-                
-                // Atualiza UI para estado GRAVANDO
-                elements.micBtn.classList.add('recording');
-                elements.micBtn.querySelector('span').textContent = 'Parar Gravação';
-                elements.recordingIndicator.classList.remove('hidden'); // Mostra badge
-                updateStatus("🎙️ Ouvindo...");
-            } else {
-                recognition.stop();
-                
-                // Atualiza UI para estado PARADO
-                elements.micBtn.classList.remove('recording');
-                elements.micBtn.querySelector('span').textContent = 'Iniciar Gravação';
-                elements.recordingIndicator.classList.add('hidden'); // Esconde badge
-                updateStatus("");
-            }
-        });
+    // 2. Digitação Manual (Sincroniza com a classe)
+    ui.textarea.addEventListener('input', () => {
+        dictation.manualUpdate(ui.textarea.value);
+    });
 
-        recognition.onresult = (event) => {
-            let interimTranscript = '';
-            for (let i = event.resultIndex; i < event.results.length; ++i) {
-                if (event.results[i].isFinal) {
-                    finalTranscript += event.results[i][0].transcript;
-                } else {
-                    interimTranscript += event.results[i][0].transcript;
-                }
-            }
-            elements.transcriptionArea.value = finalTranscript + interimTranscript;
-            elements.transcriptionArea.scrollTop = elements.transcriptionArea.scrollHeight;
-            updateCharCount(); // Atualiza contador em tempo real
-        };
-
-        recognition.onend = () => {
-            if (isRecording) {
-                isRecording = false;
-                elements.micBtn.classList.remove('recording');
-                elements.micBtn.querySelector('span').textContent = 'Iniciar Gravação';
-                elements.recordingIndicator.classList.add('hidden'); // Garante que o badge suma
-                updateStatus("");
-            }
-        };
-        
-        recognition.onerror = (event) => {
-            console.error("Erro no reconhecimento de fala:", event.error);
-            updateStatus(`Erro no microfone: ${event.error}`);
-            elements.recordingIndicator.classList.add('hidden');
-        };
-    }
-
-    // --- FUNCIONALIDADE 2: UPLOAD DE ARQUIVO (MP3) ---
-    elements.fileInput.addEventListener('change', async (e) => {
+    // 3. Upload de Arquivo
+    ui.fileInput.addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
         if (file.size > 20 * 1024 * 1024) {
-            alert("Arquivo muito grande. Limite aprox: 20MB.");
-            elements.fileInput.value = '';
+            alert("Limite de arquivo excedido (Máx 20MB).");
             return;
         }
-
-        updateStatus("📂 Lendo arquivo de áudio...");
 
         const reader = new FileReader();
         reader.readAsDataURL(file);
         
+        ui.statusMsg.textContent = "📂 Lendo áudio...";
+        
         reader.onloadend = async () => {
             const base64Data = reader.result.split(',')[1];
-            
             const payload = {
                 contents: [{
                     parts: [
-                        { text: "Transcreva este áudio fielmente para o Português do Brasil. Não adicione comentários." },
+                        { text: "Transcreva este áudio fielmente para Português. Sem comentários extras." },
                         { inlineData: { mimeType: file.type, data: base64Data } }
                     ]
                 }]
             };
 
             const transcription = await callGemini(payload);
-            
             if (transcription) {
-                const currentText = elements.transcriptionArea.value;
-                const separator = (currentText && !/[\s\n]$/.test(currentText)) ? '\n\n' : '';
-                elements.transcriptionArea.value += separator + transcription;
-                updateCharCount();
+                // Adiciona ao texto existente com quebra de linha
+                const current = ui.textarea.value;
+                const separator = (current && !/[\s\n]$/.test(current)) ? '\n\n' : '';
+                dictation.manualUpdate(current + separator + transcription);
             }
-            
-            elements.fileInput.value = ''; 
+            ui.fileInput.value = ''; 
         };
     });
 
-    // --- FUNCIONALIDADE 3: CORREÇÃO IA ---
-    async function applyAiCorrection(mode) {
-        const text = elements.transcriptionArea.value;
-        if (!text || !text.trim()) {
-            alert("A área de texto está vazia.");
-            return;
-        }
-
-        let promptText = "";
-        
-        if (mode === 'fix') {
-            promptText = `
-            Atue como um editor profissional. Corrija gramática e pontuação.
-            Mantenha o tom original. Retorne APENAS o texto corrigido.
-            Texto: "${text}"`;
-        } else if (mode === 'legal') {
-            promptText = `
-            Atue como advogado sênior. Reescreva em linguagem jurídica formal.
-            Retorne APENAS o texto reescrito.
-            Texto: "${text}"`;
-        }
+    // 4. IA: Gramática
+    ui.btnAiFix.addEventListener('click', async () => {
+        const text = ui.textarea.value;
+        if (!text) return alert("Nada para corrigir.");
 
         const payload = {
-            contents: [{ parts: [{ text: promptText }] }]
+            contents: [{ parts: [{ text: `Atue como editor profissional. Corrija gramática/pontuação do texto abaixo. Mantenha o tom original. Retorne APENAS o texto corrigido:\n\n"${text}"` }] }]
         };
 
         const result = await callGemini(payload);
-        if (result) {
-            elements.transcriptionArea.value = result;
-            updateCharCount();
+        if (result) dictation.manualUpdate(result);
+    });
+
+    // 5. IA: Juridiquês
+    ui.btnAiLegal.addEventListener('click', async () => {
+        const text = ui.textarea.value;
+        if (!text) return alert("Nada para converter.");
+
+        const payload = {
+            contents: [{ parts: [{ text: `Atue como advogado sênior. Reescreva o texto abaixo em linguagem jurídica formal, adequada para petições. Retorne APENAS o texto reescrito:\n\n"${text}"` }] }]
+        };
+
+        const result = await callGemini(payload);
+        if (result) dictation.manualUpdate(result);
+    });
+
+    // 6. Utilitários (Copiar e Limpar)
+    ui.btnCopy.addEventListener('click', () => {
+        if (!ui.textarea.value) return;
+        navigator.clipboard.writeText(ui.textarea.value).then(() => {
+            const original = ui.btnCopy.innerHTML;
+            ui.btnCopy.innerHTML = `<span style="color:green">Copiado!</span>`;
+            setTimeout(() => ui.btnCopy.innerHTML = original, 2000);
+        });
+    });
+
+    ui.btnClear.addEventListener('click', () => {
+        if (ui.textarea.value && confirm("Apagar todo o texto? Isso limpará o backup também.")) {
+            dictation.manualUpdate('');
+            ui.textarea.focus();
         }
+    });
+
+    // Helper de contagem
+    function updateCharCount() {
+        ui.charCount.textContent = `${ui.textarea.value.length} caracteres`;
     }
-
-    elements.aiFixBtn.addEventListener('click', () => applyAiCorrection('fix'));
-    elements.aiLegalBtn.addEventListener('click', () => applyAiCorrection('legal'));
-
-    // --- FUNCIONALIDADE 4: UTILITÁRIOS ---
-    elements.copyBtn.addEventListener('click', () => {
-        if (elements.transcriptionArea.value) {
-            navigator.clipboard.writeText(elements.transcriptionArea.value)
-                .then(() => {
-                    const originalText = elements.copyBtn.textContent;
-                    elements.copyBtn.textContent = 'Copiado!';
-                    setTimeout(() => { elements.copyBtn.textContent = originalText; }, 2000);
-                });
-        }
-    });
-
-    elements.clearBtn.addEventListener('click', () => {
-        if (elements.transcriptionArea.value) {
-            if (confirm("Apagar todo o texto?")) {
-                elements.transcriptionArea.value = ''; 
-                updateCharCount();
-                elements.transcriptionArea.focus();
-            }
-        }
-    });
 });
