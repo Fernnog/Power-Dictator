@@ -25,7 +25,7 @@ Substituímos a animação CSS "fake" por um **Analisador de Espectro Real** (`A
 * **Visualização:** 30 barras de frequência reagem instantaneamente aos graves e agudos da sua voz.
 * **Benefício:** Feedback visual absoluto. Se as barras se movem, o sistema *está* te ouvindo. Isso elimina a ansiedade de "falar para o nada".
 
-### 3. Engenharia de Prompt Contextual (Gemini 1.5 Flash)
+### 3. Engenharia de Prompt Contextual (Gemini Flash latest)
 A integração com IA foi reescrita para ser "Context-Aware" (Ciente do Contexto).
 * **Jurídico:** O modo "Jurídico" agora instrui a IA a atuar como um revisor de petições, convertendo linguagem coloquial em "Juridiquês Leve" e formal.
 * **Correção:** A IA analisa o texto completo para corrigir concordância e pontuação sem alterar o sentido teológico ou legal da frase.
