@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Configurações do Gemini
     const GEMINI_CONFIG = {
-        model: 'gemini-1.5-flash', // Modelo rápido e multimodal (aceita áudio)
+        model: 'gemini-flash-latest', // Modelo rápido e multimodal (aceita áudio)
         keyStorage: 'ditado_digital_gemini_key'
     };
 
