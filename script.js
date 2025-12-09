@@ -30,20 +30,30 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // =========================================================================
-    // LÓGICA DE UI: MODO COMPACTO
+    // LÓGICA DE UI: MODO COMPACTO (COM REDIMENSIONAMENTO DE JANELA)
     // =========================================================================
     ui.toggleSizeBtn.addEventListener('click', () => {
         ui.container.classList.toggle('minimized');
         const isMinimized = ui.container.classList.contains('minimized');
         
         if (isMinimized) {
+            // MODO COMPACTO
             ui.iconMinimize.style.display = 'none';
             ui.iconMaximize.style.display = 'block';
             ui.toggleSizeBtn.title = "Expandir";
+            
+            // Tenta redimensionar a janela física (funciona se aberto via Launcher)
+            // Largura 540px (pra caber o container de 500px com folga) x Altura 500px
+            try { window.resizeTo(540, 500); } catch(e) { console.log("Resize bloqueado pelo navegador"); }
+
         } else {
+            // MODO EXPANDIDO
             ui.iconMinimize.style.display = 'block';
             ui.iconMaximize.style.display = 'none';
             ui.toggleSizeBtn.title = "Modo Compacto";
+
+            // Restaura o tamanho original definido no index.html
+            try { window.resizeTo(740, 780); } catch(e) { console.log("Resize bloqueado pelo navegador"); }
         }
     });
 
@@ -171,7 +181,6 @@ document.addEventListener('DOMContentLoaded', () => {
         formatText(text) {
             let clean = text.trim();
             if (!clean) return '';
-            // Capitalização básica
             if (this.finalText.length > 0 && ['.', '!', '?'].includes(this.finalText.trim().slice(-1))) {
                 clean = clean.charAt(0).toUpperCase() + clean.slice(1);
             } else if (this.finalText.length === 0) {
@@ -227,7 +236,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const updateBars = () => {
                     if (!this.isRecording) return;
                     this.analyser.getByteFrequencyData(dataArray);
-                    // Normalização ajustada para ser mais responsiva
                     const normalize = (val) => Math.max(4, Math.min(16, val / 8));
                     
                     ui.visualizerBars[0].style.height = `${normalize(dataArray[4])}px`;
@@ -295,7 +303,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (dictation.isMachineTyping) return;
         dictation.manualUpdate(ui.textarea.value);
         dictation.updateSaveStatus(false);
-        // Debounce para salvar 'final' no storage
         clearTimeout(window.saveTimer);
         window.saveTimer = setTimeout(() => dictation.saveToCache(), 800);
     });
@@ -321,7 +328,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const file = e.target.files[0];
         if (!file) return;
         
-        // Validação simples de tamanho (ex: 10MB limit para free tier API)
         if (file.size > 10 * 1024 * 1024) {
              dictation.showError("Arquivo muito grande. Tente arquivos menores que 10MB.");
              return;
