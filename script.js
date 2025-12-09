@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
         statusMsg: document.getElementById('statusMsg')
     };
 
-    // Configurações do Gemini
+    // Configurações do 
     const GEMINI_CONFIG = {
         model: 'gemini-flash-latest', // Modelo rápido e multimodal (aceita áudio)
         keyStorage: 'ditado_digital_gemini_key'
