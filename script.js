@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // CONFIGURAÇÕES GERAIS
     // =========================================================================
     const CONFIG = {
-        geminiModel: 'gemini-1.5-flash', // Atualizado para modelo mais recente e rápido
+        geminiModel: 'gemini-flash-latest', // Atualizado para modelo mais recente e rápido
         storageKeyText: 'ditado_backup_text',
         storageKeyApi: 'ditado_digital_gemini_key'
     };
