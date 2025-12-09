@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // CONFIGURAÇÕES GERAIS
     // =========================================================================
     const CONFIG = {
-        geminiModel: 'gemini-flash-latest',
+        geminiModel: 'gemini-1.5-flash', // Atualizado para modelo mais recente e rápido
         storageKeyText: 'ditado_backup_text',
         storageKeyApi: 'ditado_digital_gemini_key'
     };
@@ -32,49 +32,40 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // =========================================================================
-    // HELPER: STATUS PILL SYSTEM (O DESIGN PREMIUM)
+    // HELPER: STATUS PILL SYSTEM
     // =========================================================================
     function setStatus(type, message) {
-        // Reseta todas as classes de status
         ui.statusMsg.className = 'status-bar';
-        
         if (!type) {
             ui.statusMsg.textContent = '';
             ui.statusMsg.classList.remove('active');
             return;
         }
-
         ui.statusMsg.textContent = message;
-        ui.statusMsg.classList.add('active'); // Ativa opacidade 1
-
+        ui.statusMsg.classList.add('active');
         switch(type) {
-            case 'rec':
-                ui.statusMsg.classList.add('status-recording');
-                break;
-            case 'ai':
-                ui.statusMsg.classList.add('status-ai');
-                break;
-            case 'success':
-                ui.statusMsg.classList.add('status-success');
-                break;
-            case 'error':
-                ui.statusMsg.classList.add('status-error');
-                break;
+            case 'rec': ui.statusMsg.classList.add('status-recording'); break;
+            case 'ai': ui.statusMsg.classList.add('status-ai'); break;
+            case 'success': ui.statusMsg.classList.add('status-success'); break;
+            case 'error': ui.statusMsg.classList.add('status-error'); break;
         }
     }
 
     // =========================================================================
-    // MÓDULO DE ÁUDIO (VISUALIZADOR + DETECÇÃO DE VOZ)
+    // MÓDULO DE ÁUDIO 3.0 (FILTROS DSP + VISUALIZADOR)
     // =========================================================================
     class AudioEngine {
         constructor() {
             this.audioContext = null;
             this.analyser = null;
             this.dataArray = null;
-            this.source = null;
             this.stream = null;
             this.animationId = null;
             this.isInitialized = false;
+            
+            // Nós de Processamento (DSP)
+            this.filterNode = null;     // Filtro Passa-Alta
+            this.compressorNode = null; // Compressor Dinâmico
             
             this.canvasCtx = ui.canvas.getContext('2d');
             this.resizeCanvas();
@@ -92,23 +83,62 @@ document.addEventListener('DOMContentLoaded', () => {
         async init() {
             if (this.isInitialized) return;
             try {
-                this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                this.stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: { 
+                        echoCancellation: true, 
+                        noiseSuppression: true, 
+                        autoGainControl: false // Vamos controlar o ganho via compressor
+                    } 
+                });
+                
                 this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // --- DSP CHAIN BUILDUP ---
+                const source = this.audioContext.createMediaStreamSource(this.stream);
+                
+                // 1. High-Pass Filter (Remove ruídos graves < 85Hz como ar-condicionado)
+                this.filterNode = this.audioContext.createBiquadFilter();
+                this.filterNode.type = 'highpass';
+                this.filterNode.frequency.value = 85;
+
+                // 2. Dynamics Compressor (Nivela o volume da voz)
+                this.compressorNode = this.audioContext.createDynamicsCompressor();
+                this.compressorNode.threshold.value = -50;
+                this.compressorNode.knee.value = 40;
+                this.compressorNode.ratio.value = 12;
+                this.compressorNode.attack.value = 0;
+                this.compressorNode.release.value = 0.25;
+
+                // 3. Analyser (Para visualização e VAD)
                 this.analyser = this.audioContext.createAnalyser();
+                this.analyser.fftSize = 256;
+                this.analyser.smoothingTimeConstant = 0.7; // Mais responsivo
                 
-                this.analyser.fftSize = 256; 
-                this.analyser.smoothingTimeConstant = 0.8;
-                
-                this.source = this.audioContext.createMediaStreamSource(this.stream);
-                this.source.connect(this.analyser);
+                // Conecta os nós: Source -> Filter -> Compressor -> Analyser -> Destination(Mudo)
+                source.connect(this.filterNode);
+                this.filterNode.connect(this.compressorNode);
+                this.compressorNode.connect(this.analyser);
+                // Não conectamos ao destination para evitar feedback de áudio (eco)
                 
                 this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
                 this.isInitialized = true;
                 this.draw();
+                
             } catch (err) {
-                console.error("Erro no AudioContext:", err);
-                setStatus('error', "Microfone Bloqueado");
+                console.error("Erro DSP Audio:", err);
+                setStatus('error', "Erro no Microfone");
             }
+        }
+
+        // Retorna se há voz ativa (Energia acima de um threshold)
+        hasVoiceActivity() {
+            if (!this.analyser) return false;
+            this.analyser.getByteFrequencyData(this.dataArray);
+            // Calcula RMS simples
+            let sum = 0;
+            for(let i=0; i < this.dataArray.length; i++) sum += this.dataArray[i];
+            const avg = sum / this.dataArray.length;
+            return avg > 10; // Threshold de silêncio (ajustável)
         }
 
         draw() {
@@ -123,19 +153,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
             ctx.clearRect(0, 0, width, height);
 
+            // Desenha barras mais suaves
             const barWidth = (width / this.dataArray.length) * 2.5;
-            let barHeight;
             let x = 0;
 
             for (let i = 0; i < this.dataArray.length; i++) {
-                barHeight = this.dataArray[i] / 2;
+                const value = this.dataArray[i];
+                const percent = value / 255;
+                const barHeight = height * percent * 0.9; // Altura relativa
                 
-                // Cor gradiente (Azul -> Roxo)
-                const hue = 240 + (barHeight * 0.5); 
-                ctx.fillStyle = `hsl(${hue}, 80%, 60%)`;
+                // Gradiente baseado na intensidade
+                const hue = 220 + (percent * 60); // Azul (220) a Roxo (280)
+                ctx.fillStyle = `hsl(${hue}, 80%, ${50 + (percent * 20)}%)`;
 
-                this.roundRect(ctx, x, height - barHeight, barWidth, barHeight, 2);
-                x += barWidth + 2;
+                // Barras arredondadas
+                if (barHeight > 2) {
+                    this.roundRect(ctx, x, height - barHeight, barWidth - 1, barHeight, 3);
+                }
+                x += barWidth;
             }
         }
 
@@ -156,6 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (this.audioContext && this.audioContext.state !== 'closed') {
                 cancelAnimationFrame(this.animationId);
                 this.canvasCtx.clearRect(0, 0, ui.canvas.width, ui.canvas.height);
+                // Não fechamos o contexto para permitir reinício rápido, apenas paramos a draw loop
             }
         }
     }
@@ -163,7 +199,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const audioEngine = new AudioEngine();
 
     // =========================================================================
-    // MOTOR DE DITADO (Speech API + Lógica de Restart)
+    // MOTOR DE DITADO (Speech API + VAD Protection)
     // =========================================================================
     class DictationEngine {
         constructor() {
@@ -215,7 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try { 
                 this.recognition.start(); 
             } catch (e) { 
-                console.warn("API já iniciada ou erro:", e); 
+                // Se já estiver rodando, ignora
             }
         }
 
@@ -230,28 +266,26 @@ document.addEventListener('DOMContentLoaded', () => {
             this.isRecording = true;
             ui.micBtn.classList.add('recording');
             ui.micSpan.textContent = "Parar"; 
-            
-            // STATUS PILL: REC
-            setStatus('rec', "Gravando em tempo real");
+            setStatus('rec', "Ouvindo...");
         }
 
         handleEnd() {
             this.isRecording = false;
             
+            // --- VAD PROTECTION LOGIC ---
+            // Se o motor parou, mas o usuário NÃO clicou em parar E ainda há som no ambiente:
             if (!this.manualStop) {
-                // Restart forçado (Infinity Stream)
-                try { 
-                    this.recognition.start(); 
-                } catch(e) { 
-                    setTimeout(() => { if(!this.manualStop) this.recognition.start() }, 300);
+                if (audioEngine.hasVoiceActivity()) {
+                    console.log("Reinício forçado por VAD (Voz detectada durante corte)");
+                    try { this.recognition.start(); } catch(e){}
+                } else {
+                    // Reinício padrão para modo 'contínuo' infinito
+                    setTimeout(() => { if(!this.manualStop) this.recognition.start(); }, 100);
                 }
             } else {
                 ui.micBtn.classList.remove('recording');
                 ui.micSpan.textContent = "Gravar";
-                
-                // STATUS PILL: LIMPAR
                 setStatus(null, "");
-                audioEngine.stop();
             }
         }
 
@@ -268,28 +302,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
             this.isMachineTyping = true; 
             ui.textarea.value = this.finalText + interimTranscript;
+            
+            // Auto-scroll inteligente
             ui.textarea.scrollTop = ui.textarea.scrollHeight;
             updateCharCount();
             
             setTimeout(() => { this.isMachineTyping = false; }, 50); 
-            
             if (!interimTranscript) this.saveToCache(); 
         }
 
         handleError(event) {
             if (event.error === 'not-allowed') {
-                setStatus('error', "Permissão de Microfone Negada");
+                setStatus('error', "Microfone Bloqueado");
                 this.manualStop = true;
             }
+            // Ignora erro 'no-speech' se VAD estiver detectando algo (será reiniciado no onEnd)
         }
 
         formatText(text) {
             let clean = text.trim();
             if (!clean) return '';
-            if (this.finalText.length === 0 || ['.', '!', '?', '\n'].includes(this.finalText.trim().slice(-1))) {
+            
+            // Capitalização inteligente baseada no último caractere do texto final
+            const lastChar = this.finalText.trim().slice(-1);
+            const needsCap = this.finalText.length === 0 || ['.', '!', '?', '\n'].includes(lastChar);
+            
+            if (needsCap) {
                 clean = clean.charAt(0).toUpperCase() + clean.slice(1);
             }
-            return ' ' + clean;
+            
+            // Espaçamento inteligente
+            return (this.finalText.length > 0 && !['\n'].includes(lastChar) ? ' ' : '') + clean;
         }
 
         saveToCache() {
@@ -319,30 +362,53 @@ document.addEventListener('DOMContentLoaded', () => {
     const dictation = new DictationEngine();
 
     // =========================================================================
-    // REDIMENSIONAMENTO DE JANELA
+    // DOCKING (JANELA BOTTOM-RIGHT) & RESIZE
     // =========================================================================
+    function dockWindowBottomRight(targetWidth, targetHeight) {
+        // Tenta mover a janela para o canto inferior direito
+        const availW = window.screen.availWidth;
+        const availH = window.screen.availHeight;
+        
+        const posX = availW - targetWidth;
+        const posY = availH - targetHeight;
+
+        try {
+            window.resizeTo(targetWidth, targetHeight);
+            window.moveTo(posX, posY);
+        } catch (e) {
+            console.warn("Navegador impediu resize/move:", e);
+        }
+    }
+
     ui.toggleSizeBtn.addEventListener('click', () => {
         ui.container.classList.toggle('minimized');
         const isMinimized = ui.container.classList.contains('minimized');
         
-        const compactW = 420; const compactH = 400; 
-        const normalW = 920; const normalH = 800;
-
         if (isMinimized) {
             ui.iconMinimize.style.display = 'none';
             ui.iconMaximize.style.display = 'block';
             ui.toggleSizeBtn.title = "Expandir";
-            try { window.resizeTo(compactW, compactH); } catch(e){}
+            // Modo Widget Compacto (380x300)
+            dockWindowBottomRight(380, 300);
         } else {
             ui.iconMinimize.style.display = 'block';
             ui.iconMaximize.style.display = 'none';
             ui.toggleSizeBtn.title = "Compactar";
-            try { window.resizeTo(normalW, normalH); } catch(e){}
+            // Modo Normal Expandido (920x800)
+            dockWindowBottomRight(920, 800);
         }
     });
 
+    // Ao iniciar, garante posição se possível
+    window.addEventListener('load', () => {
+       // Se abriu via launcher, já deve estar posicionado, mas reforçamos
+       if (!ui.container.classList.contains('minimized')) {
+           // dockWindowBottomRight(920, 800); // Opcional: pode ser intrusivo no refresh
+       }
+    });
+
     // =========================================================================
-    // INTEGRAÇÃO COM IA (GEMINI) - STATUS OTIMIZADO
+    // INTEGRAÇÃO GEMINI IA (COM CONTEXTO)
     // =========================================================================
     function getApiKey() {
         let key = localStorage.getItem(CONFIG.storageKeyApi);
@@ -357,8 +423,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const apiKey = getApiKey();
         if (!apiKey) return null;
         
-        // STATUS PILL: LOADING
-        setStatus('ai', "Processando Inteligência Artificial...");
+        setStatus('ai', "IA Pensando...");
         
         try {
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${CONFIG.geminiModel}:generateContent?key=${apiKey}`, {
@@ -370,9 +435,8 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (data.error) throw new Error(data.error.message);
             
-            // STATUS PILL: SUCCESS
-            setStatus('success', "Concluído com Sucesso");
-            setTimeout(() => setStatus(null, ""), 2500);
+            setStatus('success', "Pronto!");
+            setTimeout(() => setStatus(null, ""), 2000);
             
             return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
         } catch (error) {
@@ -381,14 +445,51 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // EVENTOS
-    ui.micBtn.addEventListener('click', () => dictation.toggle());
+    // Ferramenta de IA com Contexto Deslizante
+    const runAiTool = async (promptInstruction) => {
+        const text = ui.textarea.value;
+        if (!text) return alert("Digite ou dite algo primeiro.");
+        
+        // Pega os últimos 2000 caracteres para contexto
+        const context = text.slice(-2000); 
+        
+        const prompt = `
+        ATUE COMO UM ASSISTENTE DE REDAÇÃO JURÍDICA E CULTA.
+        INSTRUÇÃO: ${promptInstruction}
+        
+        TEXTO PARA ANÁLISE:
+        "${context}"
+        
+        SAÍDA:
+        Retorne APENAS o texto reescrito/corrigido. Mantenha o tom profissional.
+        `;
 
+        const result = await callGemini({
+            contents: [{ parts: [{ text: prompt }] }]
+        });
+        
+        if (result) {
+            // Se analisamos apenas um trecho, precisamos substituir apenas esse trecho
+            if (text.length > 2000) {
+                 const prefix = text.slice(0, text.length - 2000);
+                 dictation.manualUpdate(prefix + result);
+            } else {
+                 dictation.manualUpdate(result);
+            }
+        }
+    };
+
+    // Eventos de Botões IA
+    ui.btnAiFix.addEventListener('click', () => runAiTool("Corrija pontuação, crase, concordância e melhore a clareza sem alterar o sentido legal."));
+    ui.btnAiLegal.addEventListener('click', () => runAiTool("Reescreva este texto em linguagem jurídica formal (juridiquês moderado), adequado para petições judiciais."));
+
+    // Eventos Utilitários
+    ui.micBtn.addEventListener('click', () => dictation.toggle());
+    
     ui.textarea.addEventListener('input', () => {
         if (dictation.isMachineTyping) return;
         dictation.manualUpdate(ui.textarea.value);
         ui.saveStatus.textContent = "Digitando...";
-        ui.saveStatus.style.color = "var(--text-muted)";
     });
 
     ui.btnCopy.addEventListener('click', () => {
@@ -396,9 +497,7 @@ document.addEventListener('DOMContentLoaded', () => {
         navigator.clipboard.writeText(ui.textarea.value).then(() => {
             const originalText = ui.btnCopy.querySelector('span').textContent;
             ui.btnCopy.querySelector('span').textContent = "Copiado!";
-            setTimeout(() => {
-                ui.btnCopy.querySelector('span').textContent = originalText;
-            }, 2000);
+            setTimeout(() => { ui.btnCopy.querySelector('span').textContent = originalText; }, 2000);
         });
     });
 
@@ -416,13 +515,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
         
-        setStatus('ai', "Lendo arquivo de áudio...");
+        setStatus('ai', "Processando Áudio...");
         
         reader.onloadend = async () => {
             const base64Data = reader.result.split(',')[1];
+            // Para áudio, enviamos como prompt multimodal
             const result = await callGemini({
                 contents: [{ parts: [
-                    { text: "Transcreva este áudio em português com precisão jurídica:" }, 
+                    { text: "Transcreva este áudio em português com precisão técnica e jurídica:" }, 
                     { inlineData: { mimeType: file.type, data: base64Data } }
                 ] }]
             });
@@ -433,27 +533,6 @@ document.addEventListener('DOMContentLoaded', () => {
             ui.fileInput.value = '';
         };
     });
-
-    const runAiTool = async (promptPrefix) => {
-        const text = ui.textarea.value;
-        if (!text) return alert("Digite ou dite algo primeiro.");
-        
-        const prompt = `
-        ATUE COMO UM ESPECIALISTA EM LÍNGUA PORTUGUESA E DIREITO.
-        TAREFA: ${promptPrefix}
-        TEXTO ORIGINAL:
-        "${text}"
-        IMPORTANTE: Mantenha o sentido original. Retorne APENAS o texto revisado.
-        `;
-
-        const result = await callGemini({
-            contents: [{ parts: [{ text: prompt }] }]
-        });
-        if (result) dictation.manualUpdate(result);
-    };
-
-    ui.btnAiFix.addEventListener('click', () => runAiTool("Corrija pontuação, crase e concordância. Ajuste para norma culta."));
-    ui.btnAiLegal.addEventListener('click', () => runAiTool("Reescreva em linguagem jurídica formal (juridiquês leve), adequado para petições."));
 
     function updateCharCount() {
         ui.charCount.textContent = `${ui.textarea.value.length} caracteres`;
