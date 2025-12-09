@@ -52,3 +52,55 @@ O projeto segue a filosofia **"Vanilla Performance"**: zero frameworks, zero bui
 ├── style.css     # Design System (Variáveis CSS + Modo Widget Minimizado)
 ├── script.js     # Core Logic (AudioEngine DSP + DictationEngine + Gemini)
 └── README.md     # Documentação Técnica
+
+### O Motor de Áudio (`AudioEngine Class`)
+O fluxo de dados segue o seguinte grafo:
+`Microfone` ➔ `Filtro Biquad (HighPass)` ➔ `Compressor Dinâmico` ➔ `Analyser (Visualizador/VAD)`
+
+### Proteção VAD (Voice Activity Detection)
+O sistema monitora a energia RMS (Root Mean Square) do áudio. Se a API de reconhecimento do navegador tentar desligar o microfone enquanto você ainda está falando, o VAD detecta a energia sonora e força o reinício imediato, criando um fluxo de ditado contínuo.
+
+---
+
+## ⚡ Como Usar
+
+### Instalação
+Não requer instalação. Como é uma aplicação Web Client-Side:
+1. Baixe a pasta do projeto.
+2. Abra o arquivo `index.html` no Google Chrome ou Microsoft Edge.
+3. Clique em **"Iniciar Widget"**.
+
+### Configuração da IA
+Na primeira vez que utilizar uma função de IA (Correção ou Jurídico):
+1. O sistema pedirá sua **API Key do Google Gemini**.
+2. Você pode obter uma chave gratuita em: [Google AI Studio](https://aistudio.google.com/app/apikey).
+3. A chave será salva localmente no seu navegador.
+
+### Dica Pro: Janela Sempre no Topo
+Devido a restrições de segurança dos navegadores, sites não podem forçar "Always on Top" nativamente.
+* **Solução Recomendada:** Utilize o **Microsoft PowerToys** e pressione `Win + Ctrl + T` com a janela do ditado selecionada para fixá-la sobre as outras aplicações.
+
+---
+
+## 🎹 Atalhos e Funcionalidades
+
+| Botão | Função | Detalhes Técnicos |
+| :--- | :--- | :--- |
+| **Microfone** | Gravar / Parar | Aciona o `SpeechRecognition` + `AudioEngine`. |
+| **Upload** | Transcrever Áudio | Envia arquivo para o Gemini Vision (Multimodal). |
+| **Corrigir** | Gramática Culta | Revisa pontuação e crase mantendo o estilo. |
+| **Jurídico** | "Juridiquês" | Reescreve o texto com formalidade para petições. |
+| **Compactar** | Modo Widget | Redimensiona e ancora no canto inferior direito. |
+
+---
+
+## 🔒 Privacidade e Segurança
+
+* **Processamento Local:** O reconhecimento de voz em tempo real ocorre dentro do motor do seu navegador.
+* **Dados da IA:** Seus textos são enviados para a API do Google Gemini apenas quando você clica nos botões de correção ou upload.
+* **Persistência:** O texto é salvo automaticamente no `localStorage` do navegador. Se fechar a janela acidentalmente, o texto estará lá quando voltar.
+
+---
+
+> **Desenvolvido com foco em Engenharia de Produto.**
+> *Versão 3.1 - Stable Build*
