@@ -32,7 +32,39 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // =========================================================================
-    // MÓDULO DE ÁUDIO (VISUALIZADOR + VAD)
+    // HELPER: STATUS PILL SYSTEM (O DESIGN PREMIUM)
+    // =========================================================================
+    function setStatus(type, message) {
+        // Reseta todas as classes de status
+        ui.statusMsg.className = 'status-bar';
+        
+        if (!type) {
+            ui.statusMsg.textContent = '';
+            ui.statusMsg.classList.remove('active');
+            return;
+        }
+
+        ui.statusMsg.textContent = message;
+        ui.statusMsg.classList.add('active'); // Ativa opacidade 1
+
+        switch(type) {
+            case 'rec':
+                ui.statusMsg.classList.add('status-recording');
+                break;
+            case 'ai':
+                ui.statusMsg.classList.add('status-ai');
+                break;
+            case 'success':
+                ui.statusMsg.classList.add('status-success');
+                break;
+            case 'error':
+                ui.statusMsg.classList.add('status-error');
+                break;
+        }
+    }
+
+    // =========================================================================
+    // MÓDULO DE ÁUDIO (VISUALIZADOR + DETECÇÃO DE VOZ)
     // =========================================================================
     class AudioEngine {
         constructor() {
@@ -44,14 +76,12 @@ document.addEventListener('DOMContentLoaded', () => {
             this.animationId = null;
             this.isInitialized = false;
             
-            // Contexto do Canvas
             this.canvasCtx = ui.canvas.getContext('2d');
             this.resizeCanvas();
             window.addEventListener('resize', () => this.resizeCanvas());
         }
 
         resizeCanvas() {
-            // Ajusta o tamanho interno do canvas para alta resolução (Retina display)
             const dpr = window.devicePixelRatio || 1;
             const rect = ui.canvas.getBoundingClientRect();
             ui.canvas.width = rect.width * dpr;
@@ -66,9 +96,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 this.analyser = this.audioContext.createAnalyser();
                 
-                // Configuração para melhor visualização da voz humana
                 this.analyser.fftSize = 256; 
-                this.analyser.smoothingTimeConstant = 0.8; // Suavização
+                this.analyser.smoothingTimeConstant = 0.8;
                 
                 this.source = this.audioContext.createMediaStreamSource(this.stream);
                 this.source.connect(this.analyser);
@@ -78,7 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.draw();
             } catch (err) {
                 console.error("Erro no AudioContext:", err);
-                ui.statusMsg.textContent = "Erro: Microfone bloqueado.";
+                setStatus('error', "Microfone Bloqueado");
             }
         }
 
@@ -98,22 +127,18 @@ document.addEventListener('DOMContentLoaded', () => {
             let barHeight;
             let x = 0;
 
-            // Desenha as barras
             for (let i = 0; i < this.dataArray.length; i++) {
-                barHeight = this.dataArray[i] / 2; // Escala
-
-                // Gradiente de cor baseado na altura (volume)
-                const hue = 240 + (barHeight * 0.5); // De Azul (240) para Roxo
+                barHeight = this.dataArray[i] / 2;
+                
+                // Cor gradiente (Azul -> Roxo)
+                const hue = 240 + (barHeight * 0.5); 
                 ctx.fillStyle = `hsl(${hue}, 80%, 60%)`;
 
-                // Desenha barra arredondada
                 this.roundRect(ctx, x, height - barHeight, barWidth, barHeight, 2);
-
                 x += barWidth + 2;
             }
         }
 
-        // Função auxiliar para barras arredondadas
         roundRect(ctx, x, y, w, h, r) {
             if (w < 2 * r) r = w / 2;
             if (h < 2 * r) r = h / 2;
@@ -130,8 +155,6 @@ document.addEventListener('DOMContentLoaded', () => {
         stop() {
             if (this.audioContext && this.audioContext.state !== 'closed') {
                 cancelAnimationFrame(this.animationId);
-                // Não fechamos o context para permitir reuso rápido
-                // apenas limpamos o canvas
                 this.canvasCtx.clearRect(0, 0, ui.canvas.width, ui.canvas.height);
             }
         }
@@ -146,7 +169,7 @@ document.addEventListener('DOMContentLoaded', () => {
         constructor() {
             this.recognition = null;
             this.isRecording = false;
-            this.manualStop = false; // Flag para saber se foi o usuário que parou
+            this.manualStop = false; 
             
             this.finalText = ui.textarea.value || '';
             this.isMachineTyping = false; 
@@ -159,8 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             
             if (!SpeechRecognition) {
-                ui.statusMsg.textContent = "Navegador incompatível. Use Chrome/Edge.";
-                ui.statusMsg.classList.add('error');
+                setStatus('error', "Navegador Incompatível");
                 ui.micBtn.disabled = true;
                 return;
             }
@@ -188,12 +210,10 @@ document.addEventListener('DOMContentLoaded', () => {
             this.manualStop = false;
             this.finalText = ui.textarea.value; 
             
-            // Inicializa áudio visual primeiro (precisa de gesto do usuário)
             await audioEngine.init();
             
             try { 
                 this.recognition.start(); 
-                ui.statusMsg.classList.remove('error');
             } catch (e) { 
                 console.warn("API já iniciada ou erro:", e); 
             }
@@ -210,15 +230,16 @@ document.addEventListener('DOMContentLoaded', () => {
             this.isRecording = true;
             ui.micBtn.classList.add('recording');
             ui.micSpan.textContent = "Parar"; 
-            ui.statusMsg.textContent = "🎙️ Ouvindo...";
+            
+            // STATUS PILL: REC
+            setStatus('rec', "Gravando em tempo real");
         }
 
         handleEnd() {
             this.isRecording = false;
             
-            // Lógica "Infinity Stream": Se não foi stop manual, reinicia
             if (!this.manualStop) {
-                console.log("Reiniciando fluxo...");
+                // Restart forçado (Infinity Stream)
                 try { 
                     this.recognition.start(); 
                 } catch(e) { 
@@ -227,7 +248,9 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 ui.micBtn.classList.remove('recording');
                 ui.micSpan.textContent = "Gravar";
-                ui.statusMsg.textContent = "";
+                
+                // STATUS PILL: LIMPAR
+                setStatus(null, "");
                 audioEngine.stop();
             }
         }
@@ -250,24 +273,19 @@ document.addEventListener('DOMContentLoaded', () => {
             
             setTimeout(() => { this.isMachineTyping = false; }, 50); 
             
-            // Salva se for final
             if (!interimTranscript) this.saveToCache(); 
         }
 
         handleError(event) {
-            console.warn("Erro Speech API:", event.error);
             if (event.error === 'not-allowed') {
-                ui.statusMsg.textContent = "Permissão de microfone negada!";
-                ui.statusMsg.classList.add('error');
+                setStatus('error', "Permissão de Microfone Negada");
                 this.manualStop = true;
             }
-            // Ignora erros 'no-speech' e tenta reiniciar via onend
         }
 
         formatText(text) {
             let clean = text.trim();
             if (!clean) return '';
-            // Capitalização inteligente básica
             if (this.finalText.length === 0 || ['.', '!', '?', '\n'].includes(this.finalText.trim().slice(-1))) {
                 clean = clean.charAt(0).toUpperCase() + clean.slice(1);
             }
@@ -307,9 +325,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.container.classList.toggle('minimized');
         const isMinimized = ui.container.classList.contains('minimized');
         
-        // Compacto: Quadrado para controles
         const compactW = 420; const compactH = 400; 
-        // Expandido: Widescreen
         const normalW = 920; const normalH = 800;
 
         if (isMinimized) {
@@ -326,7 +342,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // =========================================================================
-    // INTEGRAÇÃO COM IA (GEMINI) - PROMPTS OTIMIZADOS
+    // INTEGRAÇÃO COM IA (GEMINI) - STATUS OTIMIZADO
     // =========================================================================
     function getApiKey() {
         let key = localStorage.getItem(CONFIG.storageKeyApi);
@@ -341,7 +357,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const apiKey = getApiKey();
         if (!apiKey) return null;
         
-        ui.statusMsg.textContent = "🤖 Inteligência Artificial trabalhando...";
+        // STATUS PILL: LOADING
+        setStatus('ai', "Processando Inteligência Artificial...");
         
         try {
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${CONFIG.geminiModel}:generateContent?key=${apiKey}`, {
@@ -353,13 +370,13 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (data.error) throw new Error(data.error.message);
             
-            ui.statusMsg.textContent = "✅ Texto Processado!";
-            setTimeout(() => ui.statusMsg.textContent = "", 2000);
+            // STATUS PILL: SUCCESS
+            setStatus('success', "Concluído com Sucesso");
+            setTimeout(() => setStatus(null, ""), 2500);
             
             return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
         } catch (error) {
-            ui.statusMsg.textContent = `Erro IA: ${error.message}`;
-            ui.statusMsg.classList.add('error');
+            setStatus('error', `Erro IA: ${error.message}`);
             return null;
         }
     }
@@ -398,7 +415,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!file) return;
         const reader = new FileReader();
         reader.readAsDataURL(file);
-        ui.statusMsg.textContent = "📂 Processando áudio...";
+        
+        setStatus('ai', "Lendo arquivo de áudio...");
+        
         reader.onloadend = async () => {
             const base64Data = reader.result.split(',')[1];
             const result = await callGemini({
@@ -415,20 +434,15 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     });
 
-    // Ferramentas de IA com Contexto
     const runAiTool = async (promptPrefix) => {
         const text = ui.textarea.value;
         if (!text) return alert("Digite ou dite algo primeiro.");
         
-        // Contexto para IA ser mais assertiva
         const prompt = `
         ATUE COMO UM ESPECIALISTA EM LÍNGUA PORTUGUESA E DIREITO.
-        
         TAREFA: ${promptPrefix}
-        
         TEXTO ORIGINAL:
         "${text}"
-        
         IMPORTANTE: Mantenha o sentido original. Retorne APENAS o texto revisado.
         `;
 
