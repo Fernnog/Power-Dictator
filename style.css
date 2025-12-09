@@ -2,12 +2,12 @@
 /* RESET & VARIÁVEIS                               */
 /* =============================================== */
 :root {
-    --primary: #4f46e5;       /* Índigo */
+    --primary: #4f46e5;       
     --primary-hover: #4338ca;
     --success: #10b981;
-    --danger: #ef4444;        /* Vermelho Alerta */
-    --bg-app: #f3f4f6;        /* Fundo da Janela */
-    --bg-card: #ffffff;       /* Fundo do Card */
+    --danger: #ef4444;        
+    --bg-app: #f3f4f6;        
+    --bg-card: #ffffff;       
     --text-main: #1f2937;
     --text-muted: #6b7280;
     --border: #e5e7eb;
@@ -30,13 +30,7 @@ body {
     box-sizing: border-box;
 }
 
-/* UTILITÁRIOS DE ÍCONES SVG */
-/* Garante que o ícone use a cor do texto do botão */
 svg { stroke: currentColor; } 
-
-.icon-sm { width: 18px; height: 18px; }
-.icon-xs { width: 14px; height: 14px; }
-
 
 /* =============================================== */
 /* CONTAINER PRINCIPAL                             */
@@ -47,7 +41,7 @@ svg { stroke: currentColor; }
     border-radius: 16px;
     box-shadow: var(--shadow-md);
     width: 100%;
-    max-width: 680px;
+    max-width: 720px;
     box-sizing: border-box;
 }
 
@@ -59,11 +53,28 @@ svg { stroke: currentColor; }
     margin-bottom: 0.5rem;
 }
 
+.header-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 h1 {
     font-size: 1.5rem;
     font-weight: 700;
     color: #111827;
     margin: 0;
+}
+
+.badge-pro {
+    font-size: 0.65rem;
+    color: var(--primary);
+    background: #eef2ff;
+    border: 1px solid #c7d2fe;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
 }
 
 .subtitle {
@@ -74,36 +85,45 @@ h1 {
 }
 
 /* =============================================== */
-/* INDICADOR DE GRAVAÇÃO (BADGE)                   */
+/* INDICADOR DE GRAVAÇÃO & VISUALIZADOR            */
 /* =============================================== */
 .recording-badge {
     display: inline-flex;
     align-items: center;
-    gap: 6px; /* Espaço entre pulso, ícone e texto */
+    gap: 10px;
     font-size: 0.85rem;
     font-weight: 600;
     color: var(--danger);
-    background: #fef2f2;
-    padding: 4px 12px;
+    background: #fff1f2; /* Fundo vermelho bem claro */
+    padding: 6px 16px;
     border-radius: 20px;
     border: 1px solid #fecaca;
-    transition: opacity 0.3s ease;
+    box-shadow: 0 2px 5px rgba(239, 68, 68, 0.15);
+    transition: all 0.3s ease;
+    opacity: 1;
 }
 
-.recording-badge.hidden { display: none; }
+.recording-badge.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-5px);
+}
 
-.pulse {
-    width: 8px;
-    height: 8px;
+/* Visualizador de Áudio (Barras) */
+.audio-visualizer {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    height: 16px;
+}
+
+.audio-visualizer .bar {
+    width: 3px;
     background-color: var(--danger);
-    border-radius: 50%;
-    animation: pulse-animation 1.5s infinite;
-}
-
-@keyframes pulse-animation {
-    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-    70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
-    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    border-radius: 2px;
+    height: 4px; /* Altura mínima base */
+    transition: height 0.08s ease; /* Transição rápida para resposta fluida */
+    min-height: 4px;
 }
 
 /* =============================================== */
@@ -116,6 +136,8 @@ h1 {
     transition: border-color 0.2s, box-shadow 0.2s;
     background: #fff;
     margin-bottom: 1rem;
+    display: flex;
+    flex-direction: column;
 }
 
 .editor-wrapper:focus-within {
@@ -125,11 +147,12 @@ h1 {
 
 textarea {
     width: 100%;
-    min-height: 180px;
-    padding: 1rem;
+    min-height: 200px; /* Mais altura para texto longo */
+    padding: 1.25rem;
     border: none;
     border-radius: var(--radius) var(--radius) 0 0;
-    font-size: 1rem;
+    font-size: 1.05rem; /* Texto levemente maior */
+    line-height: 1.6;
     resize: vertical;
     outline: none;
     font-family: inherit;
@@ -142,12 +165,23 @@ textarea {
     background: #f9fafb;
     border-top: 1px solid var(--border);
     border-radius: 0 0 var(--radius) var(--radius);
-    text-align: right;
     font-size: 0.75rem;
     color: var(--text-muted);
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
     align-items: center;
+}
+
+.footer-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.save-status {
+    color: var(--success);
+    font-weight: 500;
+    opacity: 0.8;
 }
 
 /* =============================================== */
@@ -160,6 +194,7 @@ textarea {
     font-weight: 500;
     margin: 0.5rem 0 1.5rem 0;
     text-align: center;
+    transition: color 0.3s;
 }
 
 /* =============================================== */
@@ -180,11 +215,11 @@ button, .btn-secondary, .tool-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.5rem; /* Espaço padrão entre ícone e texto */
+    gap: 0.5rem;
     text-decoration: none;
 }
 
-/* Botão Principal (Microfone) */
+/* Botão Principal */
 .btn-primary-large {
     background-color: var(--primary);
     color: white;
@@ -192,21 +227,21 @@ button, .btn-secondary, .tool-btn {
     border-radius: var(--radius);
     font-weight: 600;
     font-size: 1.05rem;
+    box-shadow: 0 2px 4px rgba(79, 70, 229, 0.2);
 }
 .btn-primary-large:hover { background-color: var(--primary-hover); transform: translateY(-1px); }
 .btn-primary-large:active { transform: scale(0.98); }
 
-/* Estado Gravando do Botão Principal */
+/* Estado Gravando do Botão */
 .btn-primary-large.recording {
-    background-color: white;
+    background-color: #fef2f2;
     color: var(--danger);
     border: 2px solid var(--danger);
+    padding: calc(0.85rem - 2px); /* Compensa a borda */
 }
-.btn-primary-large.recording:hover {
-    background-color: #fef2f2;
-}
+.btn-primary-large.recording:hover { background-color: #fee2e2; }
 
-/* Botão Secundário (Upload) */
+/* Botão Secundário */
 .btn-secondary {
     background-color: white;
     border: 1px solid var(--border);
@@ -217,7 +252,6 @@ button, .btn-secondary, .tool-btn {
 .btn-secondary:hover { background-color: #f9fafb; border-color: #d1d5db; }
 #fileInput { display: none; }
 
-/* Divisor */
 .divider {
     border: none;
     border-top: 1px solid var(--border);
@@ -225,7 +259,7 @@ button, .btn-secondary, .tool-btn {
 }
 
 /* =============================================== */
-/* GRADE DE FERRAMENTAS (IA/AÇÕES)                 */
+/* GRADE DE FERRAMENTAS                            */
 /* =============================================== */
 .tools-grid {
     display: grid;
@@ -234,7 +268,7 @@ button, .btn-secondary, .tool-btn {
 }
 
 .tool-btn {
-    padding: 0.7rem;
+    padding: 0.75rem;
     border-radius: 8px;
     font-size: 0.9rem;
     font-weight: 500;
@@ -247,9 +281,8 @@ button, .btn-secondary, .tool-btn {
 .tool-btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
 .tool-btn:active { transform: scale(0.98); }
 
-/* Cores Específicas das Ferramentas (Ícones herdarão estas cores) */
-.tool-btn.magic { background: #fffbeb; color: #b45309; border: 1px solid #fcd34d; } /* IA Amarelo */
-.tool-btn.legal { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; } /* Legal Azul */
-.tool-btn.action { background: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; } /* Copiar Cinza */
-.tool-btn.danger { background: #fff; color: var(--danger); border: 1px solid #fecaca; } /* Apagar Vermelho */
+.tool-btn.magic { background: #fffbeb; color: #b45309; border: 1px solid #fcd34d; }
+.tool-btn.legal { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+.tool-btn.action { background: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; }
+.tool-btn.danger { background: #fff; color: var(--danger); border: 1px solid #fecaca; }
 .tool-btn.danger:hover { background: #fef2f2; }
