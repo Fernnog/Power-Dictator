@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
         iconMinimize: document.getElementById('iconMinimize'),
         iconMaximize: document.getElementById('iconMaximize'),
         textarea: document.getElementById('transcriptionArea'),
+        canvas: document.getElementById('audioVisualizer'),
         
         micBtn: document.getElementById('micBtn'), 
         micSpan: document.querySelector('#micBtn span'), 
@@ -31,60 +32,121 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // =========================================================================
-    // LÓGICA DE UI: REDIMENSIONAMENTO (CORREÇÃO DE ASPECTO)
+    // MÓDULO DE ÁUDIO (VISUALIZADOR + VAD)
     // =========================================================================
-    ui.toggleSizeBtn.addEventListener('click', () => {
-        ui.container.classList.toggle('minimized');
-        const isMinimized = ui.container.classList.contains('minimized');
-        
-        // --- DIMENSÕES CORRIGIDAS ---
-        
-        // Compacto: Mais quadrado, menos "comprido"
-        // Largura suficiente para 6 botões circulares lado a lado
-        const compactW = 420; 
-        const compactH = 350; 
-        
-        // Expandido: Mais largo para não cortar o botão "Limpar"
-        const normalW = 920;
-        const normalH = 800;
-
-        if (isMinimized) {
-            // --- MODO COMPACTO ---
-            ui.iconMinimize.style.display = 'none';
-            ui.iconMaximize.style.display = 'block';
-            ui.toggleSizeBtn.title = "Expandir e Centralizar";
+    class AudioEngine {
+        constructor() {
+            this.audioContext = null;
+            this.analyser = null;
+            this.dataArray = null;
+            this.source = null;
+            this.stream = null;
+            this.animationId = null;
+            this.isInitialized = false;
             
-            try {
-                window.resizeTo(compactW, compactH);
-                // Move para canto inferior direito
-                const xPos = window.screen.availWidth - compactW; 
-                const yPos = window.screen.availHeight - compactH;
-                window.moveTo(xPos, yPos);
-            } catch(e) { console.log("Resize bloqueado pelo navegador/SO"); }
-
-        } else {
-            // --- MODO NORMAL ---
-            ui.iconMinimize.style.display = 'block';
-            ui.iconMaximize.style.display = 'none';
-            ui.toggleSizeBtn.title = "Modo Compacto";
-
-            try {
-                window.resizeTo(normalW, normalH);
-                const xCenter = (window.screen.availWidth - normalW) / 2;
-                const yCenter = (window.screen.availHeight - normalH) / 2;
-                window.moveTo(xCenter, yCenter);
-            } catch(e) { console.log("Resize bloqueado pelo navegador/SO"); }
+            // Contexto do Canvas
+            this.canvasCtx = ui.canvas.getContext('2d');
+            this.resizeCanvas();
+            window.addEventListener('resize', () => this.resizeCanvas());
         }
-    });
+
+        resizeCanvas() {
+            // Ajusta o tamanho interno do canvas para alta resolução (Retina display)
+            const dpr = window.devicePixelRatio || 1;
+            const rect = ui.canvas.getBoundingClientRect();
+            ui.canvas.width = rect.width * dpr;
+            ui.canvas.height = rect.height * dpr;
+            this.canvasCtx.scale(dpr, dpr);
+        }
+
+        async init() {
+            if (this.isInitialized) return;
+            try {
+                this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                this.analyser = this.audioContext.createAnalyser();
+                
+                // Configuração para melhor visualização da voz humana
+                this.analyser.fftSize = 256; 
+                this.analyser.smoothingTimeConstant = 0.8; // Suavização
+                
+                this.source = this.audioContext.createMediaStreamSource(this.stream);
+                this.source.connect(this.analyser);
+                
+                this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+                this.isInitialized = true;
+                this.draw();
+            } catch (err) {
+                console.error("Erro no AudioContext:", err);
+                ui.statusMsg.textContent = "Erro: Microfone bloqueado.";
+            }
+        }
+
+        draw() {
+            if (!this.isInitialized) return;
+            this.animationId = requestAnimationFrame(() => this.draw());
+
+            this.analyser.getByteFrequencyData(this.dataArray);
+            
+            const width = ui.canvas.clientWidth;
+            const height = ui.canvas.clientHeight;
+            const ctx = this.canvasCtx;
+
+            ctx.clearRect(0, 0, width, height);
+
+            const barWidth = (width / this.dataArray.length) * 2.5;
+            let barHeight;
+            let x = 0;
+
+            // Desenha as barras
+            for (let i = 0; i < this.dataArray.length; i++) {
+                barHeight = this.dataArray[i] / 2; // Escala
+
+                // Gradiente de cor baseado na altura (volume)
+                const hue = 240 + (barHeight * 0.5); // De Azul (240) para Roxo
+                ctx.fillStyle = `hsl(${hue}, 80%, 60%)`;
+
+                // Desenha barra arredondada
+                this.roundRect(ctx, x, height - barHeight, barWidth, barHeight, 2);
+
+                x += barWidth + 2;
+            }
+        }
+
+        // Função auxiliar para barras arredondadas
+        roundRect(ctx, x, y, w, h, r) {
+            if (w < 2 * r) r = w / 2;
+            if (h < 2 * r) r = h / 2;
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.arcTo(x + w, y, x + w, y + h, r);
+            ctx.arcTo(x + w, y + h, x, y + h, r);
+            ctx.arcTo(x, y + h, x, y, r);
+            ctx.arcTo(x, y, x + w, y, r);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        stop() {
+            if (this.audioContext && this.audioContext.state !== 'closed') {
+                cancelAnimationFrame(this.animationId);
+                // Não fechamos o context para permitir reuso rápido
+                // apenas limpamos o canvas
+                this.canvasCtx.clearRect(0, 0, ui.canvas.width, ui.canvas.height);
+            }
+        }
+    }
+
+    const audioEngine = new AudioEngine();
 
     // =========================================================================
-    // MOTOR DE DITADO (Speech API)
+    // MOTOR DE DITADO (Speech API + Lógica de Restart)
     // =========================================================================
     class DictationEngine {
         constructor() {
             this.recognition = null;
             this.isRecording = false;
-            this.shouldRestart = false; 
+            this.manualStop = false; // Flag para saber se foi o usuário que parou
             
             this.finalText = ui.textarea.value || '';
             this.isMachineTyping = false; 
@@ -97,7 +159,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             
             if (!SpeechRecognition) {
-                this.showError("Navegador incompatível. Use Chrome ou Edge.");
+                ui.statusMsg.textContent = "Navegador incompatível. Use Chrome/Edge.";
+                ui.statusMsg.classList.add('error');
                 ui.micBtn.disabled = true;
                 return;
             }
@@ -113,22 +176,33 @@ document.addEventListener('DOMContentLoaded', () => {
             this.recognition.onerror = (e) => this.handleError(e);
         }
 
-        toggle() {
-            this.isRecording ? this.stop() : this.start();
+        async toggle() {
+            if (this.isRecording) {
+                this.stop();
+            } else {
+                await this.start();
+            }
         }
 
-        start() {
-            this.shouldRestart = true;
+        async start() {
+            this.manualStop = false;
             this.finalText = ui.textarea.value; 
+            
+            // Inicializa áudio visual primeiro (precisa de gesto do usuário)
+            await audioEngine.init();
+            
             try { 
                 this.recognition.start(); 
                 ui.statusMsg.classList.remove('error');
-            } catch (e) { console.warn(e); }
+            } catch (e) { 
+                console.warn("API já iniciada ou erro:", e); 
+            }
         }
 
         stop() {
-            this.shouldRestart = false;
+            this.manualStop = true;
             this.recognition.stop();
+            audioEngine.stop();
             this.saveToCache();
         }
 
@@ -141,14 +215,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
         handleEnd() {
             this.isRecording = false;
-            if (this.shouldRestart) {
-                try { this.recognition.start(); } catch(e) { 
-                    setTimeout(() => { if(this.shouldRestart) this.recognition.start() }, 500);
+            
+            // Lógica "Infinity Stream": Se não foi stop manual, reinicia
+            if (!this.manualStop) {
+                console.log("Reiniciando fluxo...");
+                try { 
+                    this.recognition.start(); 
+                } catch(e) { 
+                    setTimeout(() => { if(!this.manualStop) this.recognition.start() }, 300);
                 }
             } else {
                 ui.micBtn.classList.remove('recording');
                 ui.micSpan.textContent = "Gravar";
                 ui.statusMsg.textContent = "";
+                audioEngine.stop();
             }
         }
 
@@ -169,26 +249,26 @@ document.addEventListener('DOMContentLoaded', () => {
             updateCharCount();
             
             setTimeout(() => { this.isMachineTyping = false; }, 50); 
+            
+            // Salva se for final
             if (!interimTranscript) this.saveToCache(); 
         }
 
         handleError(event) {
-            if (event.error === 'no-speech' || event.error === 'aborted') return;
+            console.warn("Erro Speech API:", event.error);
             if (event.error === 'not-allowed') {
-                this.showError("Permissão de microfone negada!");
-                this.shouldRestart = false;
+                ui.statusMsg.textContent = "Permissão de microfone negada!";
+                ui.statusMsg.classList.add('error');
+                this.manualStop = true;
             }
-        }
-
-        showError(msg) {
-            ui.statusMsg.textContent = `⚠️ ${msg}`;
-            ui.statusMsg.classList.add('error');
+            // Ignora erros 'no-speech' e tenta reiniciar via onend
         }
 
         formatText(text) {
             let clean = text.trim();
             if (!clean) return '';
-            if (this.finalText.length === 0 || ['.', '!', '?'].includes(this.finalText.trim().slice(-1))) {
+            // Capitalização inteligente básica
+            if (this.finalText.length === 0 || ['.', '!', '?', '\n'].includes(this.finalText.trim().slice(-1))) {
                 clean = clean.charAt(0).toUpperCase() + clean.slice(1);
             }
             return ' ' + clean;
@@ -221,7 +301,32 @@ document.addEventListener('DOMContentLoaded', () => {
     const dictation = new DictationEngine();
 
     // =========================================================================
-    // INTEGRAÇÃO COM IA (GEMINI)
+    // REDIMENSIONAMENTO DE JANELA
+    // =========================================================================
+    ui.toggleSizeBtn.addEventListener('click', () => {
+        ui.container.classList.toggle('minimized');
+        const isMinimized = ui.container.classList.contains('minimized');
+        
+        // Compacto: Quadrado para controles
+        const compactW = 420; const compactH = 400; 
+        // Expandido: Widescreen
+        const normalW = 920; const normalH = 800;
+
+        if (isMinimized) {
+            ui.iconMinimize.style.display = 'none';
+            ui.iconMaximize.style.display = 'block';
+            ui.toggleSizeBtn.title = "Expandir";
+            try { window.resizeTo(compactW, compactH); } catch(e){}
+        } else {
+            ui.iconMinimize.style.display = 'block';
+            ui.iconMaximize.style.display = 'none';
+            ui.toggleSizeBtn.title = "Compactar";
+            try { window.resizeTo(normalW, normalH); } catch(e){}
+        }
+    });
+
+    // =========================================================================
+    // INTEGRAÇÃO COM IA (GEMINI) - PROMPTS OTIMIZADOS
     // =========================================================================
     function getApiKey() {
         let key = localStorage.getItem(CONFIG.storageKeyApi);
@@ -236,7 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const apiKey = getApiKey();
         if (!apiKey) return null;
         
-        ui.statusMsg.textContent = "🤖 Processando IA...";
+        ui.statusMsg.textContent = "🤖 Inteligência Artificial trabalhando...";
         
         try {
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${CONFIG.geminiModel}:generateContent?key=${apiKey}`, {
@@ -248,12 +353,13 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (data.error) throw new Error(data.error.message);
             
-            ui.statusMsg.textContent = "✅ Pronto!";
+            ui.statusMsg.textContent = "✅ Texto Processado!";
             setTimeout(() => ui.statusMsg.textContent = "", 2000);
             
             return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
         } catch (error) {
-            dictation.showError(`Erro na IA: ${error.message}`);
+            ui.statusMsg.textContent = `Erro IA: ${error.message}`;
+            ui.statusMsg.classList.add('error');
             return null;
         }
     }
@@ -266,8 +372,6 @@ document.addEventListener('DOMContentLoaded', () => {
         dictation.manualUpdate(ui.textarea.value);
         ui.saveStatus.textContent = "Digitando...";
         ui.saveStatus.style.color = "var(--text-muted)";
-        clearTimeout(window.saveTimer);
-        window.saveTimer = setTimeout(() => dictation.saveToCache(), 800);
     });
 
     ui.btnCopy.addEventListener('click', () => {
@@ -294,12 +398,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!file) return;
         const reader = new FileReader();
         reader.readAsDataURL(file);
-        ui.statusMsg.textContent = "📂 Lendo áudio...";
+        ui.statusMsg.textContent = "📂 Processando áudio...";
         reader.onloadend = async () => {
             const base64Data = reader.result.split(',')[1];
             const result = await callGemini({
                 contents: [{ parts: [
-                    { text: "Transcreva este áudio em português:" }, 
+                    { text: "Transcreva este áudio em português com precisão jurídica:" }, 
                     { inlineData: { mimeType: file.type, data: base64Data } }
                 ] }]
             });
@@ -311,17 +415,31 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     });
 
+    // Ferramentas de IA com Contexto
     const runAiTool = async (promptPrefix) => {
         const text = ui.textarea.value;
         if (!text) return alert("Digite ou dite algo primeiro.");
+        
+        // Contexto para IA ser mais assertiva
+        const prompt = `
+        ATUE COMO UM ESPECIALISTA EM LÍNGUA PORTUGUESA E DIREITO.
+        
+        TAREFA: ${promptPrefix}
+        
+        TEXTO ORIGINAL:
+        "${text}"
+        
+        IMPORTANTE: Mantenha o sentido original. Retorne APENAS o texto revisado.
+        `;
+
         const result = await callGemini({
-            contents: [{ parts: [{ text: `${promptPrefix}\n"${text}"` }] }]
+            contents: [{ parts: [{ text: prompt }] }]
         });
         if (result) dictation.manualUpdate(result);
     };
 
-    ui.btnAiFix.addEventListener('click', () => runAiTool("Corrija estritamente a gramática e pontuação:"));
-    ui.btnAiLegal.addEventListener('click', () => runAiTool("Reescreva em linguagem jurídica formal:"));
+    ui.btnAiFix.addEventListener('click', () => runAiTool("Corrija pontuação, crase e concordância. Ajuste para norma culta."));
+    ui.btnAiLegal.addEventListener('click', () => runAiTool("Reescreva em linguagem jurídica formal (juridiquês leve), adequado para petições."));
 
     function updateCharCount() {
         ui.charCount.textContent = `${ui.textarea.value.length} caracteres`;
