@@ -45,13 +45,15 @@ Ao solicitar correções (Gramática ou Juridiquês), o sistema envia os último
 O projeto segue a filosofia **"Vanilla Performance"**: zero frameworks, zero build steps, velocidade máxima.
 
 ### Estrutura de Arquivos
-```text
+```
 /
 ├── index.html    # Launcher (Calcula posição e abre o App com segurança)
 ├── app.html      # Aplicação Principal (Container da UI e Canvas)
 ├── style.css     # Design System (Variáveis CSS + Modo Widget Minimizado)
 ├── script.js     # Core Logic (AudioEngine DSP + DictationEngine + Gemini)
 └── README.md     # Documentação Técnica
+
+```
 
 ### O Motor de Áudio (`AudioEngine Class`)
 O fluxo de dados segue o seguinte grafo:
