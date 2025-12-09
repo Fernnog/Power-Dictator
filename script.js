@@ -52,7 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // =========================================================================
-    // MÓDULO DE ÁUDIO 3.0 (FILTROS DSP + VISUALIZADOR)
+    // MÓDULO DE ÁUDIO (FILTROS DSP + VISUALIZADOR)
     // =========================================================================
     class AudioEngine {
         constructor() {
@@ -63,7 +63,6 @@ document.addEventListener('DOMContentLoaded', () => {
             this.animationId = null;
             this.isInitialized = false;
             
-            // Nós DSP
             this.filterNode = null;
             this.compressorNode = null;
             
@@ -94,12 +93,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 const source = this.audioContext.createMediaStreamSource(this.stream);
                 
-                // 1. High-Pass Filter (85Hz)
                 this.filterNode = this.audioContext.createBiquadFilter();
                 this.filterNode.type = 'highpass';
                 this.filterNode.frequency.value = 85;
 
-                // 2. Dynamics Compressor
                 this.compressorNode = this.audioContext.createDynamicsCompressor();
                 this.compressorNode.threshold.value = -50;
                 this.compressorNode.knee.value = 40;
@@ -107,7 +104,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.compressorNode.attack.value = 0;
                 this.compressorNode.release.value = 0.25;
 
-                // 3. Analyser
                 this.analyser = this.audioContext.createAnalyser();
                 this.analyser.fftSize = 256;
                 this.analyser.smoothingTimeConstant = 0.7;
@@ -196,28 +192,23 @@ document.addEventListener('DOMContentLoaded', () => {
             this.recognition = null;
             this.isRecording = false;
             this.manualStop = false; 
-            
             this.finalText = ui.textarea.value || '';
             this.isMachineTyping = false; 
-
             this.initSpeechAPI();
             this.loadFromCache(); 
         }
 
         initSpeechAPI() {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            
             if (!SpeechRecognition) {
                 setStatus('error', "Navegador Incompatível");
                 ui.micBtn.disabled = true;
                 return;
             }
-
             this.recognition = new SpeechRecognition();
             this.recognition.lang = 'pt-BR';
             this.recognition.continuous = true;
             this.recognition.interimResults = true;
-
             this.recognition.onstart = () => this.handleStart();
             this.recognition.onend = () => this.handleEnd();
             this.recognition.onresult = (e) => this.handleResult(e);
@@ -225,11 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         async toggle() {
-            if (this.isRecording) {
-                this.stop();
-            } else {
-                await this.start();
-            }
+            if (this.isRecording) { this.stop(); } else { await this.start(); }
         }
 
         async start() {
@@ -277,12 +264,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     interimTranscript += event.results[i][0].transcript;
                 }
             }
-
             this.isMachineTyping = true; 
             ui.textarea.value = this.finalText + interimTranscript;
             ui.textarea.scrollTop = ui.textarea.scrollHeight;
             updateCharCount();
-            
             setTimeout(() => { this.isMachineTyping = false; }, 50); 
             if (!interimTranscript) this.saveToCache(); 
         }
@@ -330,15 +315,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const dictation = new DictationEngine();
 
     // =========================================================================
-    // LÓGICA DE DOCKING (BOTTOM-RIGHT) & RESIZE
+    // LÓGICA DE DOCKING CORRIGIDA (BOTTOM-RIGHT)
     // =========================================================================
     function dockWindowBottomRight(targetWidth, targetHeight) {
-        // Cálculo da posição Canto Inferior Direito
-        const availW = window.screen.availWidth;
-        const availH = window.screen.availHeight;
+        // CORREÇÃO: Usa availLeft como ponto de partida
+        const screenLeft = window.screen.availLeft || 0;
+        const screenTop = window.screen.availTop || 0;
         
-        const posX = availW - targetWidth;
-        const posY = availH - targetHeight;
+        // Calcula a posição EXATA considerando o monitor atual e margem de 10px
+        const posX = (screenLeft + window.screen.availWidth) - targetWidth - 10;
+        const posY = (screenTop + window.screen.availHeight) - targetHeight - 10;
 
         try {
             window.resizeTo(targetWidth, targetHeight);
@@ -356,13 +342,13 @@ document.addEventListener('DOMContentLoaded', () => {
             ui.iconMinimize.style.display = 'none';
             ui.iconMaximize.style.display = 'block';
             ui.toggleSizeBtn.title = "Expandir";
-            // MODO COMPACTO: 380x300 (Widget pequeno)
+            // Modo Widget: 380x300
             dockWindowBottomRight(380, 300);
         } else {
             ui.iconMinimize.style.display = 'block';
             ui.iconMaximize.style.display = 'none';
             ui.toggleSizeBtn.title = "Compactar";
-            // MODO EXPANDIDO: 920x800
+            // Modo Expandido: 920x800
             dockWindowBottomRight(920, 800);
         }
     });
@@ -407,32 +393,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const runAiTool = async (promptInstruction) => {
         const text = ui.textarea.value;
         if (!text) return alert("Digite ou dite algo primeiro.");
-        
-        // Pega os últimos 2000 caracteres (Contexto Deslizante)
         const context = text.slice(-2000); 
-        
-        const prompt = `
-        ATUE COMO UM ASSISTENTE DE REDAÇÃO.
-        INSTRUÇÃO: ${promptInstruction}
-        TEXTO: "${context}"
-        SAÍDA: Retorne APENAS o texto corrigido.
-        `;
-
+        const prompt = `ATUE COMO UM ASSISTENTE DE REDAÇÃO. INSTRUÇÃO: ${promptInstruction} TEXTO: "${context}" SAÍDA: Retorne APENAS o texto corrigido.`;
         const result = await callGemini({ contents: [{ parts: [{ text: prompt }] }] });
-        
         if (result) {
             if (text.length > 2000) {
                  const prefix = text.slice(0, text.length - 2000);
                  dictation.manualUpdate(prefix + result);
-            } else {
-                 dictation.manualUpdate(result);
-            }
+            } else { dictation.manualUpdate(result); }
         }
     };
 
     ui.btnAiFix.addEventListener('click', () => runAiTool("Corrija pontuação, crase e concordância."));
     ui.btnAiLegal.addEventListener('click', () => runAiTool("Reescreva em linguagem jurídica formal."));
-
     ui.micBtn.addEventListener('click', () => dictation.toggle());
     
     ui.textarea.addEventListener('input', () => {
@@ -463,9 +436,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!file) return;
         const reader = new FileReader();
         reader.readAsDataURL(file);
-        
         setStatus('ai', "Lendo Áudio...");
-        
         reader.onloadend = async () => {
             const base64Data = reader.result.split(',')[1];
             const result = await callGemini({
