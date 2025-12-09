@@ -46,23 +46,27 @@
 </head>
 <body>
     <div class="launcher-container">
-        <h1>Ditado Digital Pro v3.0</h1>
-        <p>Motor de Áudio DSP + Widget Flutuante (Canto Inferior Direito).</p>
+        <h1>Ditado Digital Pro v3.1</h1>
+        <p>Correção de Posicionamento (Canto Inferior Direito).</p>
         <button id="openAppBtn" class="launcher-button">Iniciar Widget</button>
     </div>
 
     <script>
         document.getElementById('openAppBtn').addEventListener('click', () => {
-            // Dimensões iniciais (Modo Expandido)
             const width = 920;
             const height = 800;
             
-            // Cálculo para posicionar no canto INFERIOR DIREITO
-            // screen.availWidth desconta a barra de tarefas do Windows/Mac
-            const left = window.screen.availWidth - width;
-            const top = window.screen.availHeight - height;
+            // CORREÇÃO MATEMÁTICA:
+            // 1. Pega o ponto inicial da tela (availLeft) - crucial para múltiplos monitores
+            // 2. Soma a largura disponível (availWidth)
+            // 3. Subtrai a largura da janela (width)
+            // 4. Subtrai uma margem de segurança (10px) para evitar bloqueio do OS
+            const screenLeft = window.screen.availLeft || 0;
+            const screenTop = window.screen.availTop || 0;
+            
+            const left = (screenLeft + window.screen.availWidth) - width - 10;
+            const top = (screenTop + window.screen.availHeight) - height - 10;
 
-            // Abre a janela já na posição correta
             const windowFeatures = `width=${width},height=${height},left=${left},top=${top},popup=yes`;
             window.open('app.html', 'transcriptionApp', windowFeatures);
         });
