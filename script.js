@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // CONFIGURAÇÕES GERAIS
     // =========================================================================
     const CONFIG = {
-        geminiModel: 'gemini-flash-latest', // Atualizado para o modelo flash
+        geminiModel: 'gemini-flash-latest',
         storageKeyText: 'ditado_backup_text',
         storageKeyApi: 'ditado_digital_gemini_key'
     };
@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
         textarea: document.getElementById('transcriptionArea'),
         
         micBtn: document.getElementById('micBtn'), 
-        micSpan: document.querySelector('#micBtn span'), // Texto do botão
+        micSpan: document.querySelector('#micBtn span'), 
         
         charCount: document.getElementById('charCount'),
         statusMsg: document.getElementById('statusMsg'),
@@ -31,17 +31,21 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // =========================================================================
-    // LÓGICA DE UI: MODO COMPACTO + ANCORAGEM
+    // LÓGICA DE UI: REDIMENSIONAMENTO (CORREÇÃO DE ASPECTO)
     // =========================================================================
     ui.toggleSizeBtn.addEventListener('click', () => {
         ui.container.classList.toggle('minimized');
         const isMinimized = ui.container.classList.contains('minimized');
         
-        // Dimensões Ajustadas para o novo Design Horizontal
-        const compactW = 600; // Um pouco mais largo para caber os botões lado a lado
-        const compactH = 250; // Bem baixo, estilo barra
+        // --- DIMENSÕES CORRIGIDAS ---
         
-        const normalW = 800;
+        // Compacto: Mais quadrado, menos "comprido"
+        // Largura suficiente para 6 botões circulares lado a lado
+        const compactW = 420; 
+        const compactH = 350; 
+        
+        // Expandido: Mais largo para não cortar o botão "Limpar"
+        const normalW = 920;
         const normalH = 800;
 
         if (isMinimized) {
@@ -131,10 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
         handleStart() {
             this.isRecording = true;
             ui.micBtn.classList.add('recording');
-            
-            // Texto do botão muda apenas se não estiver minimizado (visual)
             ui.micSpan.textContent = "Parar"; 
-            
             ui.statusMsg.textContent = "🎙️ Ouvindo...";
         }
 
@@ -187,7 +188,6 @@ document.addEventListener('DOMContentLoaded', () => {
         formatText(text) {
             let clean = text.trim();
             if (!clean) return '';
-            // Capitalização simples
             if (this.finalText.length === 0 || ['.', '!', '?'].includes(this.finalText.trim().slice(-1))) {
                 clean = clean.charAt(0).toUpperCase() + clean.slice(1);
             }
@@ -198,7 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem(CONFIG.storageKeyText, ui.textarea.value);
             this.finalText = ui.textarea.value; 
             ui.saveStatus.textContent = "Salvo";
-            ui.saveStatus.style.color = "var(--c-copy)"; // verde
+            ui.saveStatus.style.color = "var(--c-copy)"; 
         }
 
         loadFromCache() {
@@ -258,14 +258,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // =========================================================================
-    // EVENT LISTENERS
-    // =========================================================================
-    
-    // Gravação
+    // EVENTOS
     ui.micBtn.addEventListener('click', () => dictation.toggle());
 
-    // Edição Manual
     ui.textarea.addEventListener('input', () => {
         if (dictation.isMachineTyping) return;
         dictation.manualUpdate(ui.textarea.value);
@@ -275,21 +270,17 @@ document.addEventListener('DOMContentLoaded', () => {
         window.saveTimer = setTimeout(() => dictation.saveToCache(), 800);
     });
 
-    // Copiar
     ui.btnCopy.addEventListener('click', () => {
         if (!ui.textarea.value) return;
         navigator.clipboard.writeText(ui.textarea.value).then(() => {
             const originalText = ui.btnCopy.querySelector('span').textContent;
             ui.btnCopy.querySelector('span').textContent = "Copiado!";
-            ui.statusMsg.textContent = "Texto copiado!";
             setTimeout(() => {
                 ui.btnCopy.querySelector('span').textContent = originalText;
-                ui.statusMsg.textContent = "";
             }, 2000);
         });
     });
 
-    // Limpar
     ui.btnClear.addEventListener('click', () => {
         if (ui.textarea.value.length === 0) return;
         if (confirm("Deseja apagar todo o texto?")) {
@@ -298,21 +289,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Upload de Arquivo
     ui.fileInput.addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        
         const reader = new FileReader();
         reader.readAsDataURL(file);
         ui.statusMsg.textContent = "📂 Lendo áudio...";
-        
         reader.onloadend = async () => {
             const base64Data = reader.result.split(',')[1];
-            // Prompt para transcrição
             const result = await callGemini({
                 contents: [{ parts: [
-                    { text: "Transcreva este áudio em português com pontuação correta:" }, 
+                    { text: "Transcreva este áudio em português:" }, 
                     { inlineData: { mimeType: file.type, data: base64Data } }
                 ] }]
             });
@@ -320,23 +307,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 const sep = (ui.textarea.value) ? '\n\n' : '';
                 dictation.manualUpdate(ui.textarea.value + sep + result);
             }
-            ui.fileInput.value = ''; // Reset input
+            ui.fileInput.value = '';
         };
     });
 
-    // Ferramentas de IA (Função Genérica)
     const runAiTool = async (promptPrefix) => {
         const text = ui.textarea.value;
         if (!text) return alert("Digite ou dite algo primeiro.");
-        
         const result = await callGemini({
-            contents: [{ parts: [{ text: `${promptPrefix}\nTexto original:\n"${text}"` }] }]
+            contents: [{ parts: [{ text: `${promptPrefix}\n"${text}"` }] }]
         });
         if (result) dictation.manualUpdate(result);
     };
 
-    ui.btnAiFix.addEventListener('click', () => runAiTool("Corrija estritamente a gramática e pontuação, mantendo o sentido original:"));
-    ui.btnAiLegal.addEventListener('click', () => runAiTool("Reescreva o seguinte texto em linguagem jurídica formal (advogado/tribunal):"));
+    ui.btnAiFix.addEventListener('click', () => runAiTool("Corrija estritamente a gramática e pontuação:"));
+    ui.btnAiLegal.addEventListener('click', () => runAiTool("Reescreva em linguagem jurídica formal:"));
 
     function updateCharCount() {
         ui.charCount.textContent = `${ui.textarea.value.length} caracteres`;
