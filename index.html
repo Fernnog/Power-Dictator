@@ -46,15 +46,21 @@
 </head>
 <body>
     <div class="launcher-container">
-        <h1>Ditado Digital Pro</h1>
-        <p>Ferramenta de transcrição contínua com IA integrada. Nova interface otimizada.</p>
-        <button id="openAppBtn" class="launcher-button">Iniciar Aplicação</button>
+        <h1>Ditado Digital Pro v3.0</h1>
+        <p>Nova Engenharia de Áudio DSP e Modo Widget Flutuante.</p>
+        <button id="openAppBtn" class="launcher-button">Iniciar Widget</button>
     </div>
 
     <script>
         document.getElementById('openAppBtn').addEventListener('click', () => {
-            // Largura aumentada para 920px para evitar cortes nos botões
-            const windowFeatures = 'width=920,height=800,popup=yes';
+            const width = 920;
+            const height = 800;
+            
+            // Tenta calcular a posição Bottom-Right
+            const left = window.screen.availWidth - width;
+            const top = window.screen.availHeight - height;
+
+            const windowFeatures = `width=${width},height=${height},left=${left},top=${top},popup=yes`;
             window.open('app.html', 'transcriptionApp', windowFeatures);
         });
     </script>
