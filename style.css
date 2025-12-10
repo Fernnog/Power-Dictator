@@ -112,6 +112,24 @@ body {
     font-weight: 700;
 }
 
+/* NOVO: Botão de Versão (Pill) */
+.version-pill {
+    background: #e5e7eb;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    margin-left: 10px;
+    transition: all 0.2s;
+    font-weight: 600;
+}
+.version-pill:hover { 
+    background: #d1d5db; 
+    color: var(--text-main); 
+}
+
 .subtitle {
     color: var(--text-muted);
     font-size: 0.95rem;
@@ -304,6 +322,27 @@ textarea {
     border: 1px solid #f87171;
 }
 
+/* NOVO: Status Aviso de Sinal Fraco */
+.status-bar.status-warning {
+    background-color: #fef3c7; 
+    color: #d97706; 
+    border: 1px solid #fcd34d;
+}
+.status-bar.status-warning::before {
+    content: ''; 
+    display: block; 
+    width: 10px; 
+    height: 10px;
+    background: #d97706; 
+    border-radius: 50%; 
+    animation: pulseOrange 1s infinite;
+}
+@keyframes pulseOrange { 
+    0% { opacity: 1; transform: scale(1); } 
+    50% { opacity: 0.5; transform: scale(0.9); } 
+    100% { opacity: 1; transform: scale(1); } 
+}
+
 /* =============================================== */
 /* 6. DOCK DE CONTROLE (BOTÕES)                    */
 /* =============================================== */
@@ -315,7 +354,7 @@ textarea {
     transition: all 0.3s ease;
 }
 
-/* NOVO: Estilo do Container do Seletor */
+/* Estilo do Container do Seletor */
 .device-selector-container {
     display: flex;
     align-items: center;
@@ -323,7 +362,7 @@ textarea {
     margin-right: 8px;
 }
 
-/* NOVO: Estilo do Select (Dropdown) */
+/* Estilo do Select (Dropdown) */
 .device-select {
     width: 100%;
     background: #fff;
@@ -450,3 +489,89 @@ textarea {
 @keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(5px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
 
 #fileInput { display: none; }
+
+/* =============================================== */
+/* 8. MODAL (NOVO)                                 */
+/* =============================================== */
+.modal-overlay {
+    position: fixed; 
+    top: 0; 
+    left: 0; 
+    width: 100%; 
+    height: 100%;
+    background: rgba(0,0,0,0.5); 
+    z-index: 1000;
+    display: flex; 
+    justify-content: center; 
+    align-items: center;
+    backdrop-filter: blur(2px);
+    animation: fadeIn 0.2s ease-out;
+}
+
+.modal-content {
+    background: white; 
+    width: 90%; 
+    max-width: 500px; 
+    max-height: 80vh;
+    border-radius: var(--radius); 
+    padding: 1.5rem;
+    box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+    display: flex; 
+    flex-direction: column;
+    animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal-header { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center;
+    margin-bottom: 1.5rem; 
+}
+.modal-header h2 { margin: 0; font-size: 1.25rem; color: var(--text-main); }
+
+.btn-close { 
+    background: none; 
+    border: none; 
+    font-size: 1.5rem; 
+    cursor: pointer; 
+    color: var(--text-muted);
+    padding: 0;
+    line-height: 1;
+}
+.btn-close:hover { color: var(--text-main); }
+
+.changelog-list { 
+    overflow-y: auto; 
+    padding-right: 10px; 
+}
+
+/* Estilo do Item de Versão */
+.version-item { 
+    margin-bottom: 1.5rem; 
+    border-bottom: 1px solid var(--border); 
+    padding-bottom: 1rem; 
+}
+.version-item:last-child { border-bottom: none; margin-bottom: 0; }
+
+.version-header { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: baseline;
+    margin-bottom: 0.5rem; 
+}
+.v-num { font-weight: 700; color: var(--c-mic); font-size: 1rem; }
+.v-date { font-size: 0.8rem; color: var(--text-muted); }
+
+.v-changes { 
+    padding-left: 1.2rem; 
+    font-size: 0.9rem; 
+    color: #4b5563; 
+    margin: 0;
+    list-style-type: disc;
+}
+.v-changes li { margin-bottom: 4px; }
+
+@keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
