@@ -1,12 +1,14 @@
-import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.14.0';
+// ATUALIZAÇÃO: Mudamos para a versão 2.17.2 que corrige o erro de "Unsupported model type"
+import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
 
 // =========================================================
 // CONFIGURAÇÃO CRÍTICA PARA USO LOCAL
 // =========================================================
-// Desabilita download remoto (evita CORS e firewall)
 env.allowRemoteModels = false;
 env.allowLocalModels = true;
-// Caminho para a pasta models relativo a este arquivo worker
+env.useBrowserCache = false; // Força ler do arquivo fresco, evita cache antigo
+
+// Caminho relativo: O worker está na pasta /js, então sobe um nível (..) para achar models
 env.localModelPath = '../models/';
 
 let transcriber = null;
@@ -17,29 +19,33 @@ self.addEventListener('message', async (event) => {
     // --- CARREGAMENTO DO MODELO ---
     if (type === 'load') {
         try {
-            self.postMessage({ status: 'loading', data: 'Buscando modelo local...' });
+            self.postMessage({ status: 'loading', data: 'Carregando arquivos locais...' });
             
-            // Instancia o pipeline. 
-            // Ele vai procurar em: ../models/Xenova/whisper-tiny/
+            // Instancia o pipeline
             transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny', {
-                quantized: true, // Importante: força uso dos arquivos _quantized.onnx que você baixou
+                quantized: true,
                 progress_callback: (data) => {
-                    // Repassa o progresso do carregamento para a UI
                     self.postMessage({ status: 'progress', data });
                 }
             });
             
+            // Teste de sanidade para garantir que carregou
+            if(!transcriber) throw new Error("Falha ao inicializar o Transcriber");
+
             self.postMessage({ status: 'ready' });
         } catch (error) {
-            console.error(error);
-            self.postMessage({ status: 'error', data: error.message });
+            console.error("Erro fatal no Worker:", error);
+            // Mensagem de erro mais detalhada para te ajudar
+            self.postMessage({ 
+                status: 'error', 
+                data: `Erro no Modelo: ${error.message}. Verifique se os arquivos .json e .onnx estão na pasta models/Xenova/whisper-tiny/` 
+            });
         }
     }
 
     // --- TRANSCRIÇÃO (INFERÊNCIA) ---
     if (type === 'transcribe' && transcriber) {
         try {
-            // Whisper espera float32 e taxa de amostragem de 16kHz
             const output = await transcriber(audio, {
                 language: 'portuguese',
                 task: 'transcribe',
@@ -47,9 +53,9 @@ self.addEventListener('message', async (event) => {
                 stride_length_s: 5
             });
             
-            // Retorna o texto transcrito
             self.postMessage({ status: 'result', text: output.text });
         } catch (err) {
+            console.error("Erro na transcrição:", err);
             self.postMessage({ status: 'error', data: err.message });
         }
     }
