@@ -1,26 +1,31 @@
+import { changelogData } from './changelog.js';
 import { GeminiService } from './gemini-service.js';
 import { SpeechManager } from './speech-manager.js';
-import { changelogData } from './changelog.js'; // Importação do novo arquivo de dados
 
 document.addEventListener('DOMContentLoaded', () => {
     // =========================================================================
-    // CONFIG E UI REFERÊNCIAS
+    // 0. INICIALIZAÇÃO DE VERSÃO E DADOS
     // =========================================================================
-    const STORAGE_KEY_TEXT = 'ditado_backup_text';
-    const STORAGE_KEY_MIC = 'ditado_pref_mic'; // Nova chave para persistência
+    const latestVersion = changelogData[0] ? changelogData[0].version : '1.0.0';
     
+    // UI REFERÊNCIAS
     const ui = {
         container: document.getElementById('appContainer'),
         toggleSizeBtn: document.getElementById('toggleSizeBtn'),
         iconMinimize: document.getElementById('iconMinimize'),
         iconMaximize: document.getElementById('iconMaximize'),
+        versionBtn: document.getElementById('versionBtn'),
         
+        // Modais
+        modal: document.getElementById('changelogModal'),
+        modalList: document.getElementById('changelogList'),
+        closeModalBtn: document.getElementById('closeModalBtn'),
+
         textarea: document.getElementById('transcriptionArea'),
         canvas: document.getElementById('audioVisualizer'),
         
         micBtn: document.getElementById('micBtn'), 
         micSpan: document.querySelector('#micBtn span'), 
-        
         audioSelect: document.getElementById('audioSource'),
 
         charCount: document.getElementById('charCount'),
@@ -31,20 +36,21 @@ document.addEventListener('DOMContentLoaded', () => {
         btnClear: document.getElementById('clearBtn'),
         btnAiFix: document.getElementById('aiFixBtn'),
         btnAiLegal: document.getElementById('aiLegalBtn'),
-        fileInput: document.getElementById('fileInput'),
-
-        // Referências do Changelog
-        versionBtn: document.getElementById('versionBtn'),
-        changelogModal: document.getElementById('changelogModal'),
-        closeModalBtn: document.getElementById('closeModalBtn'),
-        changelogList: document.getElementById('changelogList')
+        fileInput: document.getElementById('fileInput')
     };
 
+    // Define a versão no botão da UI dinamicamente
+    if (ui.versionBtn) ui.versionBtn.textContent = `v${latestVersion}`;
+
+    // Configurações de Persistência
+    const STORAGE_KEY_TEXT = 'ditado_backup_text';
+    const STORAGE_KEY_MIC = 'ditado_pref_mic';
+
     // =========================================================================
-    // HELPER: STATUS BAR
+    // 1. HELPER: STATUS BAR
     // =========================================================================
     function setStatus(type, message) {
-        ui.statusMsg.className = 'status-bar';
+        ui.statusMsg.className = 'status-bar'; // Reset classes
         if (!type || type === 'idle') {
             ui.statusMsg.textContent = '';
             ui.statusMsg.classList.remove('active');
@@ -58,19 +64,48 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'ai': ui.statusMsg.classList.add('status-ai'); break;
             case 'success': ui.statusMsg.classList.add('status-success'); break;
             case 'error': ui.statusMsg.classList.add('status-error'); break;
-            case 'warning': ui.statusMsg.classList.add('status-warning'); break; // Novo status
+            case 'warning': ui.statusMsg.classList.add('status-warning'); break;
         }
     }
 
     // =========================================================================
-    // INSTANCIAÇÃO DOS SERVIÇOS
+    // 2. LOGICA DO CHANGELOG
     // =========================================================================
-    
-    const gemini = new GeminiService();
-    
-    let isMachineTyping = false; // Flag para evitar loop de evento 'input'
+    if (ui.versionBtn) {
+        ui.versionBtn.addEventListener('click', () => {
+            ui.modalList.innerHTML = changelogData.map(v => `
+                <div class="version-item">
+                    <div class="version-header">
+                        <span class="v-num">v${v.version}</span>
+                        <span class="v-date">${v.date}</span>
+                    </div>
+                    <ul class="v-changes">
+                        ${v.changes.map(c => `<li>${c}</li>`).join('')}
+                    </ul>
+                </div>
+            `).join('');
+            ui.modal.style.display = 'flex';
+        });
+    }
 
-    // Callback para lidar com resultados do ditado
+    if (ui.closeModalBtn) {
+        ui.closeModalBtn.addEventListener('click', () => {
+            ui.modal.style.display = 'none';
+        });
+    }
+
+    // Fecha modal ao clicar fora
+    window.addEventListener('click', (e) => {
+        if (e.target === ui.modal) ui.modal.style.display = 'none';
+    });
+
+    // =========================================================================
+    // 3. INSTANCIAÇÃO DOS SERVIÇOS
+    // =========================================================================
+    const gemini = new GeminiService();
+    let isMachineTyping = false;
+
+    // Callbacks do SpeechManager
     const handleSpeechResult = (finalText, interimText) => {
         isMachineTyping = true;
         ui.textarea.value = finalText + interimText;
@@ -81,11 +116,10 @@ document.addEventListener('DOMContentLoaded', () => {
             saveToCache();
         }
         
-        // Pequeno delay para liberar a flag
+        // Pequeno delay para liberar a flag e evitar conflito com evento de input manual
         setTimeout(() => { isMachineTyping = false; }, 50);
     };
 
-    // Callback para lidar com status do microfone
     const handleSpeechStatus = (status) => {
         if (status === 'rec') {
             ui.micBtn.classList.add('recording');
@@ -104,16 +138,10 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.micBtn.classList.remove('recording');
     };
 
-    // Callback para lidar com sinal fraco (Nova Funcionalidade)
+    // Novo callback para UX de sinal fraco
     const handleSignalQuality = (quality) => {
         if (quality === 'weak' && speechManager.isRecording) {
             setStatus('warning', "Fale mais perto 🎤");
-            // Remove o aviso automaticamente após 3 segundos se a pessoa não falar
-            setTimeout(() => {
-                if(ui.statusMsg.classList.contains('status-warning')) {
-                    setStatus('rec', "Ouvindo...");
-                }
-            }, 3000);
         }
     };
 
@@ -123,32 +151,28 @@ document.addEventListener('DOMContentLoaded', () => {
             onResult: handleSpeechResult, 
             onStatus: handleSpeechStatus,
             onError: handleSpeechError,
-            onSignalQuality: handleSignalQuality // Passando novo callback
+            onSignalQuality: handleSignalQuality // Injeção da dependência de UX
         }
     );
 
     // =========================================================================
-    // LÓGICA DE SELEÇÃO DE DISPOSITIVOS & PERSISTÊNCIA
+    // 4. DISPOSITIVOS DE ÁUDIO (Com Persistência)
     // =========================================================================
     async function loadAudioDevices() {
         if (!ui.audioSelect) return;
 
         try {
-            // Solicita permissão brevemente para obter os Rótulos
             await navigator.mediaDevices.getUserMedia({ audio: true });
-            
             const devices = await navigator.mediaDevices.enumerateDevices();
             const audioInputs = devices.filter(device => device.kind === 'audioinput');
             
-            ui.audioSelect.innerHTML = ''; // Limpa lista atual
+            ui.audioSelect.innerHTML = ''; 
             
-            // Opção Padrão
             const defaultOption = document.createElement('option');
             defaultOption.value = 'default';
             defaultOption.text = 'Padrão do Sistema';
             ui.audioSelect.appendChild(defaultOption);
 
-            // Popula com dispositivos reais
             audioInputs.forEach(device => {
                 if (device.deviceId !== 'default' && device.deviceId !== 'communications') {
                     const option = document.createElement('option');
@@ -158,31 +182,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            // Recupera preferência salva (Persistência)
+            // Restaura preferência salva
             const savedMic = localStorage.getItem(STORAGE_KEY_MIC);
             if (savedMic) {
-                // Verifica se o dispositivo salvo ainda existe na lista
-                const deviceExists = Array.from(ui.audioSelect.options).some(opt => opt.value === savedMic);
-                if (deviceExists) {
+                // Verifica se o mic salvo ainda existe na lista
+                const exists = Array.from(ui.audioSelect.options).some(opt => opt.value === savedMic);
+                if (exists) {
                     ui.audioSelect.value = savedMic;
                     speechManager.setDeviceId(savedMic);
                 }
             }
 
         } catch (e) {
-            console.warn("Não foi possível listar dispositivos de áudio detalhados:", e);
+            console.warn("Não foi possível listar dispositivos:", e);
         }
     }
 
-    // Carrega a lista ao iniciar
     loadAudioDevices();
 
-    // Listener para troca de microfone com Persistência
     if (ui.audioSelect) {
         ui.audioSelect.addEventListener('change', () => {
             if (speechManager.isRecording) {
                 alert("Por favor, pare a gravação antes de trocar o microfone.");
-                // Reverte seleção visualmente se necessário, ou força stop
                 return;
             }
             const selectedMic = ui.audioSelect.value;
@@ -192,7 +213,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // =========================================================================
-    // LÓGICA DE DADOS (CACHE)
+    // 5. GERENCIAMENTO DE DADOS (CACHE)
     // =========================================================================
     function saveToCache() {
         localStorage.setItem(STORAGE_KEY_TEXT, ui.textarea.value);
@@ -213,28 +234,27 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.charCount.textContent = `${ui.textarea.value.length} caracteres`;
     }
 
-    // Carrega dados ao iniciar
     loadFromCache();
 
     // =========================================================================
-    // EVENTOS DE INTERFACE
+    // 6. EVENTOS DE INTERFACE
     // =========================================================================
 
-    // 1. Microfone
+    // Microfone
     ui.micBtn.addEventListener('click', () => {
         speechManager.toggle(ui.textarea.value);
     });
 
-    // 2. Edição Manual
+    // Edição Manual
     ui.textarea.addEventListener('input', () => {
         if (isMachineTyping) return;
         ui.saveStatus.textContent = "Digitando...";
         updateCharCount();
-        speechManager.updateContext(ui.textarea.value); 
+        speechManager.updateContext(ui.textarea.value);
         saveToCache();
     });
 
-    // 3. Funções de IA (Gemini)
+    // IA (Gemini) - Wrapper Genérico
     const runAiTool = async (promptInstruction) => {
         const text = ui.textarea.value;
         if (!text) return alert("Digite ou dite algo primeiro.");
@@ -268,7 +288,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ui.btnAiFix.addEventListener('click', () => runAiTool("Corrija pontuação, crase e concordância mantendo o tom original."));
     ui.btnAiLegal.addEventListener('click', () => runAiTool("Reescreva em linguagem jurídica formal adequada para petições."));
 
-    // 4. Upload de Arquivo
+    // Upload Multimodal
     ui.fileInput.addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -300,11 +320,11 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (error) {
                 setStatus('error', "Falha no Upload");
             }
-            ui.fileInput.value = ''; 
+            ui.fileInput.value = '';
         };
     });
 
-    // 5. Utilitários (Copiar/Limpar)
+    // Copiar
     ui.btnCopy.addEventListener('click', () => {
         if (!ui.textarea.value) return;
         navigator.clipboard.writeText(ui.textarea.value).then(() => {
@@ -314,22 +334,19 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // BOTÃO LIMPAR: Confirmação removida conforme solicitado
+    // Limpar (Zero-Friction: Sem Confirmação)
     ui.btnClear.addEventListener('click', () => {
         if (ui.textarea.value.length === 0) return;
-        
+        // Remoção da confirmação conforme solicitado (v1.0.0)
         ui.textarea.value = '';
         speechManager.updateContext('');
         saveToCache();
         updateCharCount();
         ui.textarea.focus();
-        
-        // Feedback visual rápido
-        setStatus('success', "Limpo!");
-        setTimeout(() => setStatus('idle'), 1500);
+        setStatus('success', "Limpo!"); // Feedback visual rápido
     });
 
-    // 6. Docking / Janela
+    // Widget Mode / Docking
     function dockWindowBottomRight(targetWidth, targetHeight) {
         const screenLeft = window.screen.availLeft || 0;
         const screenTop = window.screen.availTop || 0;
@@ -364,39 +381,4 @@ document.addEventListener('DOMContentLoaded', () => {
             window.dispatchEvent(new Event('resize'));
         }, 350);
     });
-
-    // =========================================================================
-    // 7. CHANGELOG (NOVA FUNCIONALIDADE)
-    // =========================================================================
-    if (ui.versionBtn && ui.changelogModal) {
-        // Abrir Modal
-        ui.versionBtn.addEventListener('click', () => {
-            // Renderiza a lista dinamicamente baseada nos dados importados
-            ui.changelogList.innerHTML = changelogData.map(v => `
-                <div class="version-item">
-                    <div class="version-header">
-                        <span class="v-num">v${v.version}</span>
-                        <span class="v-date">${v.date}</span>
-                    </div>
-                    <ul class="v-changes">
-                        ${v.changes.map(c => `<li>${c}</li>`).join('')}
-                    </ul>
-                </div>
-            `).join('');
-            
-            ui.changelogModal.style.display = 'flex';
-        });
-
-        // Fechar Modal (Botão X)
-        ui.closeModalBtn.addEventListener('click', () => {
-            ui.changelogModal.style.display = 'none';
-        });
-
-        // Fechar Modal (Clique fora)
-        ui.changelogModal.addEventListener('click', (e) => {
-            if (e.target === ui.changelogModal) {
-                ui.changelogModal.style.display = 'none';
-            }
-        });
-    }
 });
