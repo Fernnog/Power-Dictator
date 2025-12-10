@@ -1,11 +1,13 @@
 import { GeminiService } from './gemini-service.js';
 import { SpeechManager } from './speech-manager.js';
+import { changelogData } from './changelog.js'; // Importação do novo arquivo de dados
 
 document.addEventListener('DOMContentLoaded', () => {
     // =========================================================================
     // CONFIG E UI REFERÊNCIAS
     // =========================================================================
     const STORAGE_KEY_TEXT = 'ditado_backup_text';
+    const STORAGE_KEY_MIC = 'ditado_pref_mic'; // Nova chave para persistência
     
     const ui = {
         container: document.getElementById('appContainer'),
@@ -19,7 +21,6 @@ document.addEventListener('DOMContentLoaded', () => {
         micBtn: document.getElementById('micBtn'), 
         micSpan: document.querySelector('#micBtn span'), 
         
-        // NOVO: Referência ao Seletor de Áudio (Deve ser criado no HTML conforme plano)
         audioSelect: document.getElementById('audioSource'),
 
         charCount: document.getElementById('charCount'),
@@ -30,7 +31,13 @@ document.addEventListener('DOMContentLoaded', () => {
         btnClear: document.getElementById('clearBtn'),
         btnAiFix: document.getElementById('aiFixBtn'),
         btnAiLegal: document.getElementById('aiLegalBtn'),
-        fileInput: document.getElementById('fileInput')
+        fileInput: document.getElementById('fileInput'),
+
+        // Referências do Changelog
+        versionBtn: document.getElementById('versionBtn'),
+        changelogModal: document.getElementById('changelogModal'),
+        closeModalBtn: document.getElementById('closeModalBtn'),
+        changelogList: document.getElementById('changelogList')
     };
 
     // =========================================================================
@@ -51,6 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'ai': ui.statusMsg.classList.add('status-ai'); break;
             case 'success': ui.statusMsg.classList.add('status-success'); break;
             case 'error': ui.statusMsg.classList.add('status-error'); break;
+            case 'warning': ui.statusMsg.classList.add('status-warning'); break; // Novo status
         }
     }
 
@@ -96,24 +104,37 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.micBtn.classList.remove('recording');
     };
 
+    // Callback para lidar com sinal fraco (Nova Funcionalidade)
+    const handleSignalQuality = (quality) => {
+        if (quality === 'weak' && speechManager.isRecording) {
+            setStatus('warning', "Fale mais perto 🎤");
+            // Remove o aviso automaticamente após 3 segundos se a pessoa não falar
+            setTimeout(() => {
+                if(ui.statusMsg.classList.contains('status-warning')) {
+                    setStatus('rec', "Ouvindo...");
+                }
+            }, 3000);
+        }
+    };
+
     const speechManager = new SpeechManager(
         ui.canvas, 
         { 
             onResult: handleSpeechResult, 
             onStatus: handleSpeechStatus,
-            onError: handleSpeechError
+            onError: handleSpeechError,
+            onSignalQuality: handleSignalQuality // Passando novo callback
         }
     );
 
     // =========================================================================
-    // LÓGICA DE SELEÇÃO DE DISPOSITIVOS (Prioridade 2)
+    // LÓGICA DE SELEÇÃO DE DISPOSITIVOS & PERSISTÊNCIA
     // =========================================================================
     async function loadAudioDevices() {
         if (!ui.audioSelect) return;
 
         try {
-            // Solicita permissão brevemente para obter os Rótulos (Labels) dos dispositivos
-            // Sem isso, o navegador retorna apenas IDs anônimos
+            // Solicita permissão brevemente para obter os Rótulos
             await navigator.mediaDevices.getUserMedia({ audio: true });
             
             const devices = await navigator.mediaDevices.enumerateDevices();
@@ -129,7 +150,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Popula com dispositivos reais
             audioInputs.forEach(device => {
-                // Filtra duplicatas 'default' e 'communications' que o Windows cria
                 if (device.deviceId !== 'default' && device.deviceId !== 'communications') {
                     const option = document.createElement('option');
                     option.value = device.deviceId;
@@ -137,6 +157,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     ui.audioSelect.appendChild(option);
                 }
             });
+
+            // Recupera preferência salva (Persistência)
+            const savedMic = localStorage.getItem(STORAGE_KEY_MIC);
+            if (savedMic) {
+                // Verifica se o dispositivo salvo ainda existe na lista
+                const deviceExists = Array.from(ui.audioSelect.options).some(opt => opt.value === savedMic);
+                if (deviceExists) {
+                    ui.audioSelect.value = savedMic;
+                    speechManager.setDeviceId(savedMic);
+                }
+            }
 
         } catch (e) {
             console.warn("Não foi possível listar dispositivos de áudio detalhados:", e);
@@ -146,16 +177,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // Carrega a lista ao iniciar
     loadAudioDevices();
 
-    // Listener para troca de microfone
+    // Listener para troca de microfone com Persistência
     if (ui.audioSelect) {
         ui.audioSelect.addEventListener('change', () => {
             if (speechManager.isRecording) {
                 alert("Por favor, pare a gravação antes de trocar o microfone.");
-                // Reverte para a seleção anterior (opcional, requer lógica extra de estado)
+                // Reverte seleção visualmente se necessário, ou força stop
                 return;
             }
-            // Envia o ID escolhido para o SpeechManager
-            speechManager.setDeviceId(ui.audioSelect.value);
+            const selectedMic = ui.audioSelect.value;
+            speechManager.setDeviceId(selectedMic);
+            localStorage.setItem(STORAGE_KEY_MIC, selectedMic); // Salva preferência
         });
     }
 
@@ -190,7 +222,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 1. Microfone
     ui.micBtn.addEventListener('click', () => {
-        // Envia o texto atual para o speech manager saber onde continuar
         speechManager.toggle(ui.textarea.value);
     });
 
@@ -199,7 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isMachineTyping) return;
         ui.saveStatus.textContent = "Digitando...";
         updateCharCount();
-        speechManager.updateContext(ui.textarea.value); // Atualiza contexto do ditado
+        speechManager.updateContext(ui.textarea.value); 
         saveToCache();
     });
 
@@ -208,7 +239,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const text = ui.textarea.value;
         if (!text) return alert("Digite ou dite algo primeiro.");
         
-        // Pega contexto dos últimos 3000 caracteres para economizar tokens
         const context = text.slice(-3000); 
         const prompt = `ATUE COMO UM ASSISTENTE DE REDAÇÃO. INSTRUÇÃO: ${promptInstruction} TEXTO PARA ANÁLISE: "${context}" SAÍDA: Retorne APENAS o texto reescrito/corrigido.`;
         
@@ -217,7 +247,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await gemini.generate({ contents: [{ parts: [{ text: prompt }] }] });
             
             if (result) {
-                // Substitui a parte processada no texto original
                 if (text.length > 3000) {
                      const prefix = text.slice(0, text.length - 3000);
                      ui.textarea.value = prefix + result;
@@ -239,7 +268,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ui.btnAiFix.addEventListener('click', () => runAiTool("Corrija pontuação, crase e concordância mantendo o tom original."));
     ui.btnAiLegal.addEventListener('click', () => runAiTool("Reescreva em linguagem jurídica formal adequada para petições."));
 
-    // 4. Upload de Arquivo (Multimodal)
+    // 4. Upload de Arquivo
     ui.fileInput.addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -271,7 +300,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (error) {
                 setStatus('error', "Falha no Upload");
             }
-            ui.fileInput.value = ''; // Reset input
+            ui.fileInput.value = ''; 
         };
     });
 
@@ -285,18 +314,22 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // BOTÃO LIMPAR: Confirmação removida conforme solicitado
     ui.btnClear.addEventListener('click', () => {
         if (ui.textarea.value.length === 0) return;
-        if (confirm("Deseja apagar tudo?")) {
-            ui.textarea.value = '';
-            speechManager.updateContext('');
-            saveToCache();
-            updateCharCount();
-            ui.textarea.focus();
-        }
+        
+        ui.textarea.value = '';
+        speechManager.updateContext('');
+        saveToCache();
+        updateCharCount();
+        ui.textarea.focus();
+        
+        // Feedback visual rápido
+        setStatus('success', "Limpo!");
+        setTimeout(() => setStatus('idle'), 1500);
     });
 
-    // 6. Docking / Janela (Lógica de Widget)
+    // 6. Docking / Janela
     function dockWindowBottomRight(targetWidth, targetHeight) {
         const screenLeft = window.screen.availLeft || 0;
         const screenTop = window.screen.availTop || 0;
@@ -327,9 +360,43 @@ document.addEventListener('DOMContentLoaded', () => {
             dockWindowBottomRight(920, 800);
         }
         
-        // Força redesenho do canvas após transição CSS
         setTimeout(() => {
             window.dispatchEvent(new Event('resize'));
         }, 350);
     });
+
+    // =========================================================================
+    // 7. CHANGELOG (NOVA FUNCIONALIDADE)
+    // =========================================================================
+    if (ui.versionBtn && ui.changelogModal) {
+        // Abrir Modal
+        ui.versionBtn.addEventListener('click', () => {
+            // Renderiza a lista dinamicamente baseada nos dados importados
+            ui.changelogList.innerHTML = changelogData.map(v => `
+                <div class="version-item">
+                    <div class="version-header">
+                        <span class="v-num">v${v.version}</span>
+                        <span class="v-date">${v.date}</span>
+                    </div>
+                    <ul class="v-changes">
+                        ${v.changes.map(c => `<li>${c}</li>`).join('')}
+                    </ul>
+                </div>
+            `).join('');
+            
+            ui.changelogModal.style.display = 'flex';
+        });
+
+        // Fechar Modal (Botão X)
+        ui.closeModalBtn.addEventListener('click', () => {
+            ui.changelogModal.style.display = 'none';
+        });
+
+        // Fechar Modal (Clique fora)
+        ui.changelogModal.addEventListener('click', (e) => {
+            if (e.target === ui.changelogModal) {
+                ui.changelogModal.style.display = 'none';
+            }
+        });
+    }
 });
