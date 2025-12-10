@@ -1,21 +1,14 @@
 export const changelogData = [
     {
         version: "1.0.0",
-        date: "2023-10-01",
+        date: new Date().toLocaleDateString('pt-BR'), // Data de hoje
         changes: [
-            "Lançamento inicial do Ditado Digital.",
-            "Integração básica com Web Speech API.",
-            "Editor de texto simples."
-        ]
-    },
-    {
-        version: "3.1.0",
-        date: "2023-10-27",
-        changes: [
-            "Motor de Áudio DSP (Compressor e Filtros).",
-            "Smart Docking (Posicionamento automático).",
-            "Integração com Gemini AI (Correção e Jurídico)."
+            "Lançamento Oficial da Versão 1.0.",
+            "Motor de Áudio DSP: Filtros de ruído e compressor dinâmico.",
+            "Smart Docking: Modo Widget flutuante no canto da tela.",
+            "Integração IA: Correção gramatical e modo 'Jurídico' via Gemini.",
+            "UX Otimizada: Monitor de sinal fraco e remoção de travas de segurança.",
+            "Persistência: Salva preferências de microfone automaticamente."
         ]
     }
-    // Adicione novas versões aqui
 ];
