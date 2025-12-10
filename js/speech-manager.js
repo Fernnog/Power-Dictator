@@ -31,7 +31,10 @@ class AudioVisualizer {
         if (this.isActive) return;
         
         try {
+            // Cria contexto de áudio. O navegador geralmente ajusta a sampleRate para casar com o stream,
+            // mas podemos tentar sugerir alta qualidade.
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            
             const source = this.audioContext.createMediaStreamSource(stream);
             
             // --- CADEIA DSP ---
@@ -128,7 +131,17 @@ export class SpeechManager {
         this.manualStop = false;
         this.currentText = ""; // Armazena o texto atual para formatação
         
+        // Configuração de Dispositivo (Default: Padrão do Sistema)
+        this.selectedDeviceId = 'default';
+
         this.initSpeechAPI();
+    }
+
+    // Método para definir qual dispositivo físico usar
+    setDeviceId(deviceId) {
+        this.selectedDeviceId = deviceId;
+        // Se estiver gravando, a mudança só terá efeito na próxima gravação
+        // O main.js já previne a troca durante a gravação.
     }
 
     initSpeechAPI() {
@@ -188,15 +201,27 @@ export class SpeechManager {
     async start() {
         this.manualStop = false;
         try {
-            // 1. Obtém o Stream de áudio PRIMEIRO (Crucial para o visualizador funcionar)
-            this.stream = await navigator.mediaDevices.getUserMedia({ 
-                audio: { 
-                    echoCancellation: true, 
-                    noiseSuppression: true 
-                } 
-            });
+            // 1. Configuração de Alta Fidelidade (Prioridade 3)
+            // Aqui definimos explicitamente como queremos que o navegador capture o áudio
+            const constraints = {
+                audio: {
+                    echoCancellation: true, // Remove eco
+                    noiseSuppression: true, // Remove ruído de fundo
+                    autoGainControl: true,  // Nivela o volume automaticamente
+                    channelCount: 1,        // Mono é ideal para reconhecimento de voz
+                    sampleRate: 48000       // Solicita qualidade de estúdio (48kHz)
+                }
+            };
 
-            // 2. Inicia o visualizador
+            // Se o usuário selecionou um dispositivo específico, usamos o 'exact'
+            if (this.selectedDeviceId && this.selectedDeviceId !== 'default') {
+                constraints.audio.deviceId = { exact: this.selectedDeviceId };
+            }
+
+            // Obtém o Stream com as configurações aplicadas
+            this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+            // 2. Inicia o visualizador com o stream tratado
             await this.visualizer.start(this.stream);
 
             // 3. Inicia o reconhecimento
