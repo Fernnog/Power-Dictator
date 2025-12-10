@@ -1,12 +1,15 @@
+import { CONFIG } from './config.js';
 import { changelogData } from './changelog.js';
 import { GeminiService } from './gemini-service.js';
 import { SpeechManager } from './speech-manager.js';
+import { HotkeyManager } from './hotkeys.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // =========================================================================
     // 0. INICIALIZAÇÃO DE VERSÃO E DADOS
     // =========================================================================
-    const latestVersion = changelogData[0] ? changelogData[0].version : '1.0.0';
+    // Nota: Mantemos o fallback para 1.0.0 caso o changelog não tenha a 1.0.1 ainda
+    const latestVersion = changelogData[0] ? changelogData[0].version : '1.0.1';
     
     // UI REFERÊNCIAS
     const ui = {
@@ -16,10 +19,11 @@ document.addEventListener('DOMContentLoaded', () => {
         iconMaximize: document.getElementById('iconMaximize'),
         versionBtn: document.getElementById('versionBtn'),
         
-        // Modais
+        // Modais e Toasts
         modal: document.getElementById('changelogModal'),
         modalList: document.getElementById('changelogList'),
         closeModalBtn: document.getElementById('closeModalBtn'),
+        toastContainer: document.getElementById('toastContainer'), // Novo container para Toast
 
         textarea: document.getElementById('transcriptionArea'),
         canvas: document.getElementById('audioVisualizer'),
@@ -41,10 +45,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Define a versão no botão da UI dinamicamente
     if (ui.versionBtn) ui.versionBtn.textContent = `v${latestVersion}`;
-
-    // Configurações de Persistência
-    const STORAGE_KEY_TEXT = 'ditado_backup_text';
-    const STORAGE_KEY_MIC = 'ditado_pref_mic';
 
     // =========================================================================
     // 1. HELPER: STATUS BAR
@@ -138,7 +138,6 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.micBtn.classList.remove('recording');
     };
 
-    // Novo callback para UX de sinal fraco
     const handleSignalQuality = (quality) => {
         if (quality === 'weak' && speechManager.isRecording) {
             setStatus('warning', "Fale mais perto 🎤");
@@ -151,7 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
             onResult: handleSpeechResult, 
             onStatus: handleSpeechStatus,
             onError: handleSpeechError,
-            onSignalQuality: handleSignalQuality // Injeção da dependência de UX
+            onSignalQuality: handleSignalQuality
         }
     );
 
@@ -182,10 +181,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            // Restaura preferência salva
-            const savedMic = localStorage.getItem(STORAGE_KEY_MIC);
+            // Restaura preferência salva usando CONFIG
+            const savedMic = localStorage.getItem(CONFIG.STORAGE_KEYS.MIC);
             if (savedMic) {
-                // Verifica se o mic salvo ainda existe na lista
                 const exists = Array.from(ui.audioSelect.options).some(opt => opt.value === savedMic);
                 if (exists) {
                     ui.audioSelect.value = savedMic;
@@ -208,7 +206,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const selectedMic = ui.audioSelect.value;
             speechManager.setDeviceId(selectedMic);
-            localStorage.setItem(STORAGE_KEY_MIC, selectedMic); // Salva preferência
+            localStorage.setItem(CONFIG.STORAGE_KEYS.MIC, selectedMic); 
         });
     }
 
@@ -216,13 +214,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // 5. GERENCIAMENTO DE DADOS (CACHE)
     // =========================================================================
     function saveToCache() {
-        localStorage.setItem(STORAGE_KEY_TEXT, ui.textarea.value);
+        localStorage.setItem(CONFIG.STORAGE_KEYS.TEXT, ui.textarea.value);
         ui.saveStatus.textContent = "Salvo";
         ui.saveStatus.style.color = "var(--c-copy)";
     }
 
     function loadFromCache() {
-        const saved = localStorage.getItem(STORAGE_KEY_TEXT);
+        const saved = localStorage.getItem(CONFIG.STORAGE_KEYS.TEXT);
         if (saved) {
             ui.textarea.value = saved;
             speechManager.updateContext(saved);
@@ -237,7 +235,59 @@ document.addEventListener('DOMContentLoaded', () => {
     loadFromCache();
 
     // =========================================================================
-    // 6. EVENTOS DE INTERFACE
+    // 6. LÓGICA DE SEGURANÇA (UNDO / DESFAZER) - NOVO v1.0.1
+    // =========================================================================
+    let tempBackupText = '';
+    let undoTimeout = null;
+
+    const showUndoToast = () => {
+        if (!ui.toastContainer) return;
+
+        ui.toastContainer.innerHTML = `
+            <div class="toast">
+                <span>Texto apagado.</span>
+                <button id="undoBtn" class="btn-undo">Desfazer (Alt+Z)</button>
+            </div>
+        `;
+        
+        // Adiciona evento ao botão criado dinamicamente
+        const btnUndoDOM = document.getElementById('undoBtn');
+        if (btnUndoDOM) btnUndoDOM.onclick = performUndo;
+        
+        // Timer de auto-fechamento
+        if (undoTimeout) clearTimeout(undoTimeout);
+        undoTimeout = setTimeout(() => {
+            ui.toastContainer.innerHTML = '';
+            tempBackupText = ''; // Limpa backup por segurança
+        }, CONFIG.UI.TOAST_DURATION);
+    };
+
+    const performUndo = () => {
+        if (!tempBackupText) return;
+        ui.textarea.value = tempBackupText;
+        speechManager.updateContext(tempBackupText);
+        saveToCache();
+        updateCharCount();
+        
+        if (ui.toastContainer) ui.toastContainer.innerHTML = ''; // Fecha toast
+        
+        setStatus('success', 'Restaurado!');
+        tempBackupText = ''; // Reseta backup para evitar reuso
+    };
+
+    const handleClearAction = () => {
+        if (!ui.textarea.value) return;
+        tempBackupText = ui.textarea.value; // Salva estado
+        ui.textarea.value = '';
+        speechManager.updateContext('');
+        saveToCache();
+        updateCharCount();
+        ui.textarea.focus();
+        showUndoToast(); // Exibe a rede de segurança
+    };
+
+    // =========================================================================
+    // 7. EVENTOS DE INTERFACE
     // =========================================================================
 
     // Microfone
@@ -334,17 +384,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Limpar (Zero-Friction: Sem Confirmação)
-    ui.btnClear.addEventListener('click', () => {
-        if (ui.textarea.value.length === 0) return;
-        // Remoção da confirmação conforme solicitado (v1.0.0)
-        ui.textarea.value = '';
-        speechManager.updateContext('');
-        saveToCache();
-        updateCharCount();
-        ui.textarea.focus();
-        setStatus('success', "Limpo!"); // Feedback visual rápido
-    });
+    // Limpar (SUBSTITUÍDO PELA NOVA LÓGICA SAFE)
+    ui.btnClear.addEventListener('click', handleClearAction);
 
     // Widget Mode / Docking
     function dockWindowBottomRight(targetWidth, targetHeight) {
@@ -380,5 +421,15 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => {
             window.dispatchEvent(new Event('resize'));
         }, 350);
+    });
+
+    // =========================================================================
+    // 8. GERENCIAMENTO DE ATALHOS (HOTKEYS) - NOVO v1.0.1
+    // =========================================================================
+    new HotkeyManager(ui, {
+        triggerRec: () => ui.micBtn.click(), // Dispara o clique no botão para manter feedback visual
+        triggerClear: handleClearAction,     // Usa a função segura com Undo
+        triggerCopy: () => ui.btnCopy.click(),
+        triggerUndo: performUndo
     });
 });
