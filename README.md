@@ -1,4 +1,4 @@
-# Ditado Digital Pro v3.1 🎙️
+# Ditado Digital Pro 🎙️
 > **Engenharia de Áudio DSP + Inteligência Artificial Contextual.**
 > *A ferramenta definitiva para transcrição jurídica e teológica com Zero Latência.*
 
@@ -16,7 +16,7 @@ Além disso, introduzimos o **Smart Docking**, transformando a aplicação em um
 
 ---
 
-## 🚀 Novidades da Versão 3.1
+## 🚀 Novidades
 
 ### 1. Cadeia de Tratamento de Áudio (Audio Graph)
 Utilizamos nós de áudio nativos (`AudioContext`) para tratar o sinal em tempo real:
