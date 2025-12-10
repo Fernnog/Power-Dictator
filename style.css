@@ -1,566 +1,630 @@
-/* =============================================== /
-/ 1. RESET & VARIÁVEIS DE CORES /
-/ =============================================== /
+/* =============================================== */
+/* 1. RESET & VARIÁVEIS DE CORES                   */
+/* =============================================== */
 :root {
-/ Cores Funcionais /
---c-mic: #4f46e5; / Indigo /
---c-mic-active: #ef4444; / Red - Gravação Ativa /
---c-upload: #8b5cf6; / Violet /
---c-magic: #f59e0b; / Amber /
---c-legal: #0ea5e9; / Sky Blue /
---c-copy: #10b981; / Emerald /
---c-clear: #f43f5e; / Rose */
-code
-Code
-/* UI Neutros */
---bg-app: #f3f4f6;
---bg-card: #ffffff;
---text-main: #1f2937;
---text-muted: #6b7280;
---border: #e5e7eb;
+    /* Cores Funcionais */
+    --c-mic: #4f46e5;      /* Indigo */
+    --c-mic-active: #ef4444; /* Red - Gravação Ativa */
+    --c-upload: #8b5cf6;   /* Violet */
+    --c-magic: #f59e0b;    /* Amber */
+    --c-legal: #0ea5e9;    /* Sky Blue */
+    --c-copy: #10b981;     /* Emerald */
+    --c-clear: #f43f5e;    /* Rose */
+    
+    /* UI Neutros */
+    --bg-app: #f3f4f6;
+    --bg-card: #ffffff;
+    --text-main: #1f2937;
+    --text-muted: #6b7280;
+    --border: #e5e7eb;
+    
+    /* Sombras & Radius */
+    --shadow-soft: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    --radius: 16px;
+    --btn-radius: 12px;
+}
 
-/* Sombras & Radius */
---shadow-soft: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
---radius: 16px;
---btn-radius: 12px;
-}
 body {
-font-family: 'Inter', sans-serif;
-background-color: var(--bg-app);
-color: var(--text-main);
-display: flex;
-justify-content: center;
-align-items: center;
-min-height: 100vh;
-margin: 0;
-overflow: hidden;
+    font-family: 'Inter', sans-serif;
+    background-color: var(--bg-app);
+    color: var(--text-main);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+    overflow: hidden; 
 }
-/* =============================================== /
-/ 2. CONTAINER PRINCIPAL /
-/ =============================================== */
+
+/* =============================================== */
+/* 2. CONTAINER PRINCIPAL                          */
+/* =============================================== */
 .container {
-background-color: var(--bg-card);
-width: 100%;
-max-width: 950px;
-height: 90vh;
-border-radius: var(--radius);
-box-shadow: var(--shadow-soft);
-padding: 2rem;
-display: flex;
-flex-direction: column;
-box-sizing: border-box;
-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-position: relative;
+    background-color: var(--bg-card);
+    width: 100%;
+    max-width: 950px; 
+    height: 90vh;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
 }
-/* --- MODO MINIMIZADO (WIDGET COMPACTO) --- /
+
+/* --- MODO MINIMIZADO (WIDGET COMPACTO) --- */
 .container.minimized {
-padding: 10px;
-height: 100vh; / Ocupa toda a altura da janela popup reduzida */
-border-radius: 0;
-background: rgba(255, 255, 255, 0.98);
+    padding: 10px;
+    height: 100vh; /* Ocupa toda a altura da janela popup reduzida */
+    border-radius: 0;
+    background: rgba(255, 255, 255, 0.98);
 }
+
 /* Esconde elementos desnecessários no modo widget */
 .container.minimized .header-title,
 .container.minimized .badge-pro,
 .container.minimized .subtitle,
 .container.minimized .editor-footer,
 .container.minimized .visualizer-container,
-.container.minimized .btn-upload,
-.container.minimized .btn-legal,
+.container.minimized .btn-upload, 
+.container.minimized .btn-legal,  
 .container.minimized .btn-copy,
 .container.minimized .status-bar,
-.container.minimized .device-selector-container {
-display: none !important;
+/* NOVO: Esconde o seletor de áudio no modo mini */
+.container.minimized .device-selector-container { 
+    display: none !important;
 }
+
 .container.minimized .app-header {
-margin-bottom: 0;
-height: 0;
-overflow: visible;
+    margin-bottom: 0;
+    height: 0;
+    overflow: visible;
 }
-/* =============================================== /
-/ 3. HEADER & VISUALIZER /
-/ =============================================== */
+
+/* =============================================== */
+/* 3. HEADER & VISUALIZER                          */
+/* =============================================== */
 .app-header {
-display: flex;
-justify-content: space-between;
-align-items: center;
-margin-bottom: 0.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
 }
+
 .header-title h1 {
-font-size: 1.5rem;
-font-weight: 700;
-margin: 0;
-letter-spacing: -0.5px;
-display: flex;
-align-items: center;
-gap: 8px;
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0;
+    letter-spacing: -0.5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
+
 .badge-pro {
-font-size: 0.7rem;
-background: #e0e7ff;
-color: var(--c-mic);
-padding: 2px 6px;
-border-radius: 4px;
-font-weight: 700;
+    font-size: 0.7rem;
+    background: #e0e7ff;
+    color: var(--c-mic);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 700;
 }
+
 /* Botão de Versão (Pill) */
 .version-pill {
-background: #e5e7eb;
-border: none;
-padding: 4px 8px;
-border-radius: 12px;
-font-size: 0.7rem;
-color: var(--text-muted);
-cursor: pointer;
-margin-left: 10px;
-transition: all 0.2s;
-font-weight: 600;
+    background: #e5e7eb;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    margin-left: 10px;
+    transition: all 0.2s;
+    font-weight: 600;
 }
-.version-pill:hover {
-background: #d1d5db;
-color: var(--text-main);
+.version-pill:hover { 
+    background: #d1d5db; 
+    color: var(--text-main); 
 }
+
 .subtitle {
-color: var(--text-muted);
-font-size: 0.95rem;
-margin-bottom: 1rem;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    margin-bottom: 1rem;
 }
+
 /* Container do Canvas (Osciloscópio) */
 .visualizer-container {
-width: 100%;
-height: 60px;
-display: flex;
-justify-content: center;
-align-items: center;
-margin-bottom: 1rem;
-background: #f9fafb;
-border-radius: 8px;
-overflow: hidden;
-border: 1px solid var(--border);
+    width: 100%;
+    height: 60px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 1rem;
+    background: #f9fafb;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border);
 }
+
 canvas#audioVisualizer {
-width: 100%;
-height: 100%;
+    width: 100%;
+    height: 100%;
 }
+
 .btn-toggle-size {
-position: absolute;
-top: 1rem;
-right: 1rem;
-background: transparent;
-border: none;
-color: var(--text-muted);
-cursor: pointer;
-padding: 8px;
-border-radius: 50%;
-z-index: 10;
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 50%;
+    z-index: 10;
 }
 .btn-toggle-size:hover { background: #f3f4f6; color: var(--text-main); }
-/* =============================================== /
-/ 4. ÁREA DE TEXTO (EDITOR) /
-/ =============================================== */
+
+/* =============================================== */
+/* 4. ÁREA DE TEXTO (EDITOR)                       */
+/* =============================================== */
 .editor-area {
-flex-grow: 1;
-display: flex;
-flex-direction: column;
-background: #f9fafb;
-border: 1px solid var(--border);
-border-radius: var(--radius);
-transition: all 0.3s;
-margin-bottom: 1rem;
-overflow: hidden;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    background: #f9fafb;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    transition: all 0.3s;
+    margin-bottom: 1rem;
+    overflow: hidden;
 }
+
 .editor-area:focus-within {
-border-color: var(--c-mic);
-box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
-background: #fff;
+    border-color: var(--c-mic);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    background: #fff;
 }
+
 textarea {
-width: 100%;
-height: 100%;
-border: none;
-padding: 1.5rem;
-font-size: 1.1rem;
-line-height: 1.6;
-background: transparent;
-resize: none;
-outline: none;
-font-family: inherit;
-color: #374151;
-box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    border: none;
+    padding: 1.5rem;
+    font-size: 1.1rem;
+    line-height: 1.6;
+    background: transparent;
+    resize: none;
+    outline: none;
+    font-family: inherit;
+    color: #374151;
+    box-sizing: border-box;
 }
+
 .editor-footer {
-padding: 0.5rem 1rem;
-border-top: 1px solid var(--border);
-font-size: 0.75rem;
-color: var(--text-muted);
-display: flex;
-justify-content: space-between;
-background: #fff;
+    padding: 0.5rem 1rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    display: flex;
+    justify-content: space-between;
+    background: #fff;
 }
-/* Ajustes Específicos do Editor no Modo Compacto /
+
+/* Ajustes Específicos do Editor no Modo Compacto */
 .container.minimized .editor-area {
-margin-top: 2rem; / Espaço para o botão de toggle */
-margin-bottom: 0.5rem;
-border-radius: 12px;
-background: transparent;
-border: none;
-box-shadow: none;
+    margin-top: 2rem; /* Espaço para o botão de toggle */
+    margin-bottom: 0.5rem;
+    border-radius: 12px;
+    background: transparent;
+    border: none;
+    box-shadow: none;
 }
+
 .container.minimized textarea {
-padding: 0.5rem;
-font-size: 1.1rem;
-background: #f9fafb;
-border-radius: 8px;
+    padding: 0.5rem;
+    font-size: 1.1rem;
+    background: #f9fafb;
+    border-radius: 8px;
 }
-/* =============================================== /
-/ 5. STATUS PILL /
-/ =============================================== */
+
+/* =============================================== */
+/* 5. STATUS PILL                                  */
+/* =============================================== */
 .status-bar {
-display: flex;
-align-items: center;
-justify-content: center;
-gap: 10px;
-height: 32px;
-margin-bottom: 0.8rem;
-font-size: 0.75rem;
-font-weight: 700;
-letter-spacing: 0.5px;
-text-transform: uppercase;
-opacity: 0;
-transition: all 0.3s ease;
-border-radius: 20px;
-padding: 0 16px;
-width: fit-content;
-margin-left: auto;
-margin-right: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    height: 32px; 
+    margin-bottom: 0.8rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    opacity: 0;
+    transition: all 0.3s ease;
+    border-radius: 20px;
+    padding: 0 16px;
+    width: fit-content;
+    margin-left: auto;
+    margin-right: auto;
 }
+
 .status-bar.active { opacity: 1; }
+
 .status-bar.status-recording {
-background-color: #fee2e2;
-color: #ef4444;
-border: 1px solid #fecaca;
-box-shadow: 0 2px 5px rgba(239, 68, 68, 0.15);
+    background-color: #fee2e2;
+    color: #ef4444;
+    border: 1px solid #fecaca;
+    box-shadow: 0 2px 5px rgba(239, 68, 68, 0.15);
 }
+
 .status-bar.status-recording::before {
-content: '';
-display: block;
-width: 8px;
-height: 8px;
-background-color: #ef4444;
-border-radius: 50%;
-animation: blinkRed 1.5s infinite;
+    content: '';
+    display: block;
+    width: 8px;
+    height: 8px;
+    background-color: #ef4444;
+    border-radius: 50%;
+    animation: blinkRed 1.5s infinite;
 }
+
 @keyframes blinkRed {
-0% { opacity: 1; transform: scale(1); }
-50% { opacity: 0.4; transform: scale(0.8); }
-100% { opacity: 1; transform: scale(1); }
+    0% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.8); }
+    100% { opacity: 1; transform: scale(1); }
 }
+
 .status-bar.status-ai {
-background-color: #e0e7ff;
-color: #4f46e5;
-border: 1px solid #c7d2fe;
+    background-color: #e0e7ff;
+    color: #4f46e5;
+    border: 1px solid #c7d2fe;
 }
+
 .status-bar.status-ai::before {
-content: '';
-display: block;
-width: 12px;
-height: 12px;
-border: 2px solid rgba(79, 70, 229, 0.3);
-border-radius: 50%;
-border-top-color: #4f46e5;
-animation: spin 0.8s linear infinite;
+    content: '';
+    display: block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(79, 70, 229, 0.3);
+    border-radius: 50%;
+    border-top-color: #4f46e5;
+    animation: spin 0.8s linear infinite;
 }
+
 @keyframes spin { to { transform: rotate(360deg); } }
+
 .status-bar.status-success {
-background-color: #d1fae5;
-color: #059669;
-border: 1px solid #a7f3d0;
+    background-color: #d1fae5;
+    color: #059669;
+    border: 1px solid #a7f3d0;
 }
+
 .status-bar.status-success::before {
-content: '';
-display: block;
-width: 6px;
-height: 10px;
-border: solid #059669;
-border-width: 0 2px 2px 0;
-transform: rotate(45deg);
-margin-bottom: 2px;
+    content: '';
+    display: block;
+    width: 6px;
+    height: 10px;
+    border: solid #059669;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+    margin-bottom: 2px;
 }
+
 .status-bar.status-error {
-background-color: #fef2f2;
-color: #b91c1c;
-border: 1px solid #f87171;
+    background-color: #fef2f2;
+    color: #b91c1c;
+    border: 1px solid #f87171;
 }
+
 /* Status Aviso de Sinal Fraco */
 .status-bar.status-warning {
-background-color: #fef3c7;
-color: #d97706;
-border: 1px solid #fcd34d;
+    background-color: #fef3c7; 
+    color: #d97706; 
+    border: 1px solid #fcd34d;
 }
 .status-bar.status-warning::before {
-content: '';
-display: block;
-width: 10px;
-height: 10px;
-background: #d97706;
-border-radius: 50%;
-animation: pulseOrange 1s infinite;
+    content: ''; 
+    display: block; 
+    width: 10px; 
+    height: 10px;
+    background: #d97706; 
+    border-radius: 50%; 
+    animation: pulseOrange 1s infinite;
 }
-@keyframes pulseOrange {
-0% { opacity: 1; transform: scale(1); }
-50% { opacity: 0.5; transform: scale(0.9); }
-100% { opacity: 1; transform: scale(1); }
+@keyframes pulseOrange { 
+    0% { opacity: 1; transform: scale(1); } 
+    50% { opacity: 0.5; transform: scale(0.9); } 
+    100% { opacity: 1; transform: scale(1); } 
 }
-/* =============================================== /
-/ 6. DOCK DE CONTROLE (BOTÕES) /
-/ =============================================== */
+
+/* =============================================== */
+/* 6. DOCK DE CONTROLE (BOTÕES)                    */
+/* =============================================== */
 .control-dock {
-display: flex;
-align-items: center;
-gap: 10px;
-padding: 0.5rem;
-transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0.5rem;
+    transition: all 0.3s ease;
 }
+
 /* Estilo do Container do Seletor */
 .device-selector-container {
-display: flex;
-align-items: center;
-max-width: 160px;
-margin-right: 8px;
+    display: flex;
+    align-items: center;
+    max-width: 160px;
+    margin-right: 8px;
 }
+
 /* Estilo do Select (Dropdown) */
 .device-select {
-width: 100%;
-background: #fff;
-border: 1px solid var(--border);
-padding: 10px 8px;
-border-radius: var(--btn-radius);
-font-size: 0.85rem;
-color: var(--text-main);
-outline: none;
-cursor: pointer;
-font-family: inherit;
-text-overflow: ellipsis;
+    width: 100%;
+    background: #fff;
+    border: 1px solid var(--border);
+    padding: 10px 8px;
+    border-radius: var(--btn-radius);
+    font-size: 0.85rem;
+    color: var(--text-main);
+    outline: none;
+    cursor: pointer;
+    font-family: inherit;
+    text-overflow: ellipsis;
 }
+
 .device-select:hover {
-border-color: var(--c-mic);
-background-color: #f9fafb;
+    border-color: var(--c-mic);
+    background-color: #f9fafb;
 }
+
 .btn-action {
-display: flex;
-align-items: center;
-justify-content: center;
-gap: 8px;
-padding: 12px 16px;
-border-radius: var(--btn-radius);
-border: none;
-font-weight: 600;
-font-size: 0.9rem;
-cursor: pointer;
-transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
-color: white;
-flex: 1;
-box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-position: relative;
-white-space: nowrap;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 16px; 
+    border-radius: var(--btn-radius);
+    border: none;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+    color: white;
+    flex: 1; 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    position: relative;
+    white-space: nowrap;
 }
+
 .btn-action svg {
-width: 20px;
-height: 20px;
-stroke-width: 2.5;
-flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    stroke-width: 2.5;
+    flex-shrink: 0;
 }
-.btn-mic { background-color: var(--c-mic); flex: 1.5; }
+
+.btn-mic    { background-color: var(--c-mic); flex: 1.5; }
 .btn-upload { background-color: var(--c-upload); color: white;}
-.btn-magic { background-color: var(--c-magic); color: white;}
-.btn-legal { background-color: var(--c-legal); color: white;}
-.btn-copy { background-color: var(--c-copy); color: white;}
-.btn-clear { background-color: white; color: var(--c-clear); border: 1px solid #fecaca; }
+.btn-magic  { background-color: var(--c-magic); color: white;}
+.btn-legal  { background-color: var(--c-legal); color: white;}
+.btn-copy   { background-color: var(--c-copy); color: white;}
+.btn-clear  { background-color: white; color: var(--c-clear); border: 1px solid #fecaca; }
+
 .btn-action:hover { transform: translateY(-2px); filter: brightness(1.08); }
 .btn-clear:hover { background-color: #fef2f2; }
+
 .btn-mic.recording {
-background-color: var(--c-mic-active);
-box-shadow: inset 0 0 10px rgba(0,0,0,0.2);
+    background-color: var(--c-mic-active);
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.2);
 }
+
 /* --- Ajustes DOCK no Modo Compacto --- */
 .container.minimized .control-dock {
-justify-content: space-around;
-gap: 6px;
-padding: 0 0 5px 0;
-flex-wrap: nowrap;
+    justify-content: space-around;
+    gap: 6px;
+    padding: 0 0 5px 0;
+    flex-wrap: nowrap;
 }
+
 .container.minimized .btn-action {
-flex: 0 0 auto;
-width: 42px;
-height: 42px;
-padding: 0;
-border-radius: 50%;
-box-shadow: none;
+    flex: 0 0 auto; 
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    border-radius: 50%;
+    box-shadow: none;
 }
+
 .container.minimized .btn-mic {
-width: 56px;
-height: 56px;
-order: 2; /* Centro */
-margin: 0 8px;
-box-shadow: 0 4px 10px rgba(79, 70, 229, 0.25);
+    width: 56px;
+    height: 56px;
+    order: 2; /* Centro */
+    margin: 0 8px;
+    box-shadow: 0 4px 10px rgba(79, 70, 229, 0.25);
 }
+
 /* Exibe apenas estes botões no modo mini */
 .container.minimized .btn-magic { order: 1; display: flex !important; background-color: #f59e0b; }
 .container.minimized .btn-clear { order: 3; display: flex !important; border: none; background: #fee2e2; color: #ef4444; }
+
 .container.minimized .btn-action span { display: none; }
-/* =============================================== /
-/ 7. TOOLTIPS /
-/ =============================================== */
+
+/* =============================================== */
+/* 7. TOOLTIPS                                    */
+/* =============================================== */
 [data-tooltip]:hover::after {
-content: attr(data-tooltip);
-position: absolute;
-bottom: 120%;
-left: 50%;
-transform: translateX(-50%);
-background: #1f2937;
-color: white;
-padding: 6px 10px;
-border-radius: 6px;
-font-size: 0.75rem;
-white-space: nowrap;
-z-index: 100;
-pointer-events: none;
-animation: fadeIn 0.2s forwards;
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 120%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1f2937;
+    color: white;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    z-index: 100;
+    pointer-events: none;
+    animation: fadeIn 0.2s forwards;
 }
+
 [data-tooltip]:hover::before {
-content: '';
-position: absolute;
-bottom: 110%;
-left: 50%;
-transform: translateX(-50%);
-border-width: 5px;
-border-style: solid;
-border-color: #1f2937 transparent transparent transparent;
-animation: fadeIn 0.2s forwards;
+    content: '';
+    position: absolute;
+    bottom: 110%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 5px;
+    border-style: solid;
+    border-color: #1f2937 transparent transparent transparent;
+    animation: fadeIn 0.2s forwards;
 }
+
 @keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(5px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
 #fileInput { display: none; }
-/* =============================================== /
-/ 8. MODAL /
-/ =============================================== */
+
+/* =============================================== */
+/* 8. MODAL (NOVO)                                 */
+/* =============================================== */
 .modal-overlay {
-position: fixed;
-top: 0;
-left: 0;
-width: 100%;
-height: 100%;
-background: rgba(0,0,0,0.5);
-z-index: 1000;
-display: flex;
-justify-content: center;
-align-items: center;
-backdrop-filter: blur(2px);
-animation: fadeIn 0.2s ease-out;
+    position: fixed; 
+    top: 0; 
+    left: 0; 
+    width: 100%; 
+    height: 100%;
+    background: rgba(0,0,0,0.5); 
+    z-index: 1000;
+    display: flex; 
+    justify-content: center; 
+    align-items: center;
+    backdrop-filter: blur(2px);
+    animation: fadeIn 0.2s ease-out;
 }
+
 .modal-content {
-background: white;
-width: 90%;
-max-width: 500px;
-max-height: 80vh;
-border-radius: var(--radius);
-padding: 1.5rem;
-box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
-display: flex;
-flex-direction: column;
-animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    background: white; 
+    width: 90%; 
+    max-width: 500px; 
+    max-height: 80vh;
+    border-radius: var(--radius); 
+    padding: 1.5rem;
+    box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+    display: flex; 
+    flex-direction: column;
+    animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.modal-header {
-display: flex;
-justify-content: space-between;
-align-items: center;
-margin-bottom: 1.5rem;
+
+.modal-header { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center;
+    margin-bottom: 1.5rem; 
 }
 .modal-header h2 { margin: 0; font-size: 1.25rem; color: var(--text-main); }
-.btn-close {
-background: none;
-border: none;
-font-size: 1.5rem;
-cursor: pointer;
-color: var(--text-muted);
-padding: 0;
-line-height: 1;
+
+.btn-close { 
+    background: none; 
+    border: none; 
+    font-size: 1.5rem; 
+    cursor: pointer; 
+    color: var(--text-muted);
+    padding: 0;
+    line-height: 1;
 }
 .btn-close:hover { color: var(--text-main); }
-.changelog-list {
-overflow-y: auto;
-padding-right: 10px;
+
+.changelog-list { 
+    overflow-y: auto; 
+    padding-right: 10px; 
 }
+
 /* Estilo do Item de Versão */
-.version-item {
-margin-bottom: 1.5rem;
-border-bottom: 1px solid var(--border);
-padding-bottom: 1rem;
+.version-item { 
+    margin-bottom: 1.5rem; 
+    border-bottom: 1px solid var(--border); 
+    padding-bottom: 1rem; 
 }
 .version-item:last-child { border-bottom: none; margin-bottom: 0; }
-.version-header {
-display: flex;
-justify-content: space-between;
-align-items: baseline;
-margin-bottom: 0.5rem;
+
+.version-header { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: baseline;
+    margin-bottom: 0.5rem; 
 }
 .v-num { font-weight: 700; color: var(--c-mic); font-size: 1rem; }
 .v-date { font-size: 0.8rem; color: var(--text-muted); }
-.v-changes {
-padding-left: 1.2rem;
-font-size: 0.9rem;
-color: #4b5563;
-margin: 0;
-list-style-type: disc;
+
+.v-changes { 
+    padding-left: 1.2rem; 
+    font-size: 0.9rem; 
+    color: #4b5563; 
+    margin: 0;
+    list-style-type: disc;
 }
 .v-changes li { margin-bottom: 4px; }
+
 @keyframes slideUp {
-from { transform: translateY(20px); opacity: 0; }
-to { transform: translateY(0); opacity: 1; }
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
 }
-/* =============================================== /
-/ 9. TOAST NOTIFICATIONS (NOVO v1.0.1) /
-/ =============================================== */
+
+/* =============================================== */
+/* 9. NOTIFICAÇÕES (TOAST) - NOVO v1.0.1           */
+/* =============================================== */
 .toast-container {
-position: fixed;
-bottom: 20px;
-left: 50%;
-transform: translateX(-50%);
-z-index: 2000;
-pointer-events: none;
-display: flex;
-flex-direction: column;
-gap: 10px;
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2000; /* Z-Index alto para ficar acima de tudo */
+    pointer-events: none; /* Permite clicar através do container vazio */
+    width: 100%;
+    display: flex;
+    justify-content: center;
 }
+
 .toast {
-background: #1f2937;
-color: white;
-padding: 12px 24px;
-border-radius: 8px;
-box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
-display: flex;
-align-items: center;
-gap: 12px;
-font-size: 0.9rem;
-pointer-events: auto;
-animation: slideUpFade 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    background: #1f2937;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 8px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.9rem;
+    pointer-events: auto; /* Reativa cliques no toast específico */
+    animation: slideUpFade 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
 .btn-undo {
-background: transparent;
-border: 1px solid rgba(255,255,255,0.3);
-color: #818cf8;
-padding: 4px 12px;
-border-radius: 4px;
-cursor: pointer;
-font-weight: 600;
-transition: all 0.2s;
-font-size: 0.8rem;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #818cf8;
+    padding: 4px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s;
+    font-family: inherit;
+    font-size: 0.8rem;
 }
-.btn-undo:hover {
-background: rgba(255,255,255,0.1);
-color: #a5b4fc;
-border-color: #a5b4fc;
+
+.btn-undo:hover { 
+    background: rgba(255,255,255,0.1); 
+    color: #a5b4fc; 
+    border-color: #a5b4fc;
 }
+
 @keyframes slideUpFade {
-from { opacity: 0; transform: translateY(20px); }
-to { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
 }
