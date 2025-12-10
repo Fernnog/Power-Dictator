@@ -2,9 +2,6 @@ import { GeminiService } from './gemini-service.js';
 import { SpeechManager } from './speech-manager.js';
 
 document.addEventListener('DOMContentLoaded', () => {
-    // =========================================================================
-    // CONFIG E UI REFERÊNCIAS
-    // =========================================================================
     const STORAGE_KEY_TEXT = 'ditado_backup_text';
     
     const ui = {
@@ -23,6 +20,11 @@ document.addEventListener('DOMContentLoaded', () => {
         statusMsg: document.getElementById('statusMsg'),
         saveStatus: document.getElementById('saveStatus'),
         
+        // Progress Bar Elements
+        loadingBar: document.getElementById('modelLoadingBar'),
+        progressFill: document.getElementById('progressFill'),
+        progressText: document.getElementById('progressText'),
+        
         btnCopy: document.getElementById('copyBtn'),
         btnClear: document.getElementById('clearBtn'),
         btnAiFix: document.getElementById('aiFixBtn'),
@@ -30,9 +32,8 @@ document.addEventListener('DOMContentLoaded', () => {
         fileInput: document.getElementById('fileInput')
     };
 
-    // =========================================================================
-    // HELPER: STATUS BAR
-    // =========================================================================
+    const gemini = new GeminiService();
+
     function setStatus(type, message) {
         ui.statusMsg.className = 'status-bar';
         if (!type || type === 'idle') {
@@ -51,60 +52,81 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // =========================================================================
-    // INSTANCIAÇÃO DOS SERVIÇOS
-    // =========================================================================
-    
-    const gemini = new GeminiService();
-    
-    let isMachineTyping = false; // Flag para evitar loop de evento 'input'
+    // --- WHISPER CALLBACKS ---
 
-    // Callback para lidar com resultados do ditado
-    const handleSpeechResult = (finalText, interimText) => {
-        isMachineTyping = true;
-        ui.textarea.value = finalText + interimText;
+    // 1. Recebe Texto Final do Whisper
+    const handleSpeechResult = (text) => {
+        if (!text || text.trim() === '') return;
+        
+        const currentContent = ui.textarea.value;
+        // Adiciona espaço se necessário
+        const separator = (currentContent.length > 0 && !currentContent.endsWith('\n')) ? ' ' : '';
+        
+        ui.textarea.value = currentContent + separator + text.trim();
         ui.textarea.scrollTop = ui.textarea.scrollHeight;
         updateCharCount();
-        
-        if (!interimText) {
-            saveToCache();
-        }
-        
-        // Pequeno delay para liberar a flag
-        setTimeout(() => { isMachineTyping = false; }, 50);
+        saveToCache();
     };
 
-    // Callback para lidar com status do microfone
+    // 2. Monitora Status do Sistema
     const handleSpeechStatus = (status) => {
         if (status === 'rec') {
             ui.micBtn.classList.add('recording');
             ui.micSpan.textContent = "Parar";
             setStatus('rec', "Ouvindo...");
-        } else if (status === 'idle') {
+        } 
+        else if (status === 'thinking') {
+            ui.micBtn.classList.remove('recording');
+            ui.micSpan.textContent = "Pensando...";
+            ui.micBtn.disabled = true; // Bloqueia enquanto processa
+            setStatus('ai', "Transcrevendo...");
+        }
+        else if (status === 'idle') {
             ui.micBtn.classList.remove('recording');
             ui.micSpan.textContent = "Gravar";
+            ui.micBtn.disabled = false;
             setStatus('idle');
-            saveToCache();
+        }
+        else if (status === 'ready') {
+            // Modelo carregado!
+            ui.loadingBar.style.display = 'none';
+            ui.textarea.placeholder = "Modelo Whisper pronto. Toque no microfone.";
+            ui.textarea.disabled = false;
+            ui.micBtn.disabled = false;
+            ui.micSpan.textContent = "Gravar";
+        }
+    };
+
+    // 3. Monitora Progresso de Carregamento (Load inicial)
+    const handleProgress = (data) => {
+        // data.status pode ser 'initiate', 'download', 'progress', 'done'
+        if (data.status === 'progress') {
+            ui.loadingBar.style.display = 'block';
+            const percent = data.progress.toFixed(1) + '%';
+            ui.progressFill.style.width = percent;
+            ui.progressText.textContent = percent;
         }
     };
 
     const handleSpeechError = (msg) => {
         setStatus('error', msg);
         ui.micBtn.classList.remove('recording');
+        ui.micBtn.disabled = false;
+        ui.micSpan.textContent = "Gravar";
     };
 
+    // Instancia o Manager
     const speechManager = new SpeechManager(
         ui.canvas, 
         { 
             onResult: handleSpeechResult, 
             onStatus: handleSpeechStatus,
-            onError: handleSpeechError
+            onError: handleSpeechError,
+            onProgress: handleProgress
         }
     );
 
-    // =========================================================================
-    // LÓGICA DE DADOS (CACHE)
-    // =========================================================================
+    // --- Cache e UI Utils ---
     function saveToCache() {
         localStorage.setItem(STORAGE_KEY_TEXT, ui.textarea.value);
         ui.saveStatus.textContent = "Salvo";
@@ -115,7 +137,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const saved = localStorage.getItem(STORAGE_KEY_TEXT);
         if (saved) {
             ui.textarea.value = saved;
-            speechManager.updateContext(saved);
             updateCharCount();
         }
     }
@@ -124,51 +145,37 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.charCount.textContent = `${ui.textarea.value.length} caracteres`;
     }
 
-    // Carrega dados ao iniciar
     loadFromCache();
 
-    // =========================================================================
-    // EVENTOS DE INTERFACE
-    // =========================================================================
+    // --- Event Listeners ---
 
-    // 1. Microfone
     ui.micBtn.addEventListener('click', () => {
-        // Envia o texto atual para o speech manager saber onde continuar
-        speechManager.toggle(ui.textarea.value);
+        speechManager.toggle();
     });
 
-    // 2. Edição Manual
     ui.textarea.addEventListener('input', () => {
-        if (isMachineTyping) return;
         ui.saveStatus.textContent = "Digitando...";
         updateCharCount();
-        speechManager.updateContext(ui.textarea.value); // Atualiza contexto do ditado
         saveToCache();
     });
 
-    // 3. Funções de IA (Gemini)
+    // IA (Gemini) e Uploads continuam iguais...
     const runAiTool = async (promptInstruction) => {
         const text = ui.textarea.value;
         if (!text) return alert("Digite ou dite algo primeiro.");
-        
-        // Pega contexto dos últimos 3000 caracteres para economizar tokens
         const context = text.slice(-3000); 
         const prompt = `ATUE COMO UM ASSISTENTE DE REDAÇÃO. INSTRUÇÃO: ${promptInstruction} TEXTO PARA ANÁLISE: "${context}" SAÍDA: Retorne APENAS o texto reescrito/corrigido.`;
         
         try {
             setStatus('ai', "IA Pensando...");
             const result = await gemini.generate({ contents: [{ parts: [{ text: prompt }] }] });
-            
             if (result) {
-                // Substitui a parte processada no texto original
                 if (text.length > 3000) {
                      const prefix = text.slice(0, text.length - 3000);
                      ui.textarea.value = prefix + result;
                 } else { 
                     ui.textarea.value = result; 
                 }
-                
-                speechManager.updateContext(ui.textarea.value);
                 saveToCache();
                 updateCharCount();
                 setStatus('success', "Feito!");
@@ -182,16 +189,12 @@ document.addEventListener('DOMContentLoaded', () => {
     ui.btnAiFix.addEventListener('click', () => runAiTool("Corrija pontuação, crase e concordância mantendo o tom original."));
     ui.btnAiLegal.addEventListener('click', () => runAiTool("Reescreva em linguagem jurídica formal adequada para petições."));
 
-    // 4. Upload de Arquivo (Multimodal)
     ui.fileInput.addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
-
         const reader = new FileReader();
         reader.readAsDataURL(file);
-        
         setStatus('ai', "Lendo Áudio...");
-        
         reader.onloadend = async () => {
             try {
                 const base64Data = reader.result.split(',')[1];
@@ -201,12 +204,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         { inlineData: { mimeType: file.type, data: base64Data } }
                     ] }]
                 });
-
                 if (result) {
                     const sep = (ui.textarea.value) ? '\n\n' : '';
-                    const newContent = ui.textarea.value + sep + result;
-                    ui.textarea.value = newContent;
-                    speechManager.updateContext(newContent);
+                    ui.textarea.value += sep + result;
                     saveToCache();
                     updateCharCount();
                     setStatus('success', "Transcrito!");
@@ -214,11 +214,10 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (error) {
                 setStatus('error', "Falha no Upload");
             }
-            ui.fileInput.value = ''; // Reset input
+            ui.fileInput.value = '';
         };
     });
 
-    // 5. Utilitários (Copiar/Limpar)
     ui.btnCopy.addEventListener('click', () => {
         if (!ui.textarea.value) return;
         navigator.clipboard.writeText(ui.textarea.value).then(() => {
@@ -232,20 +231,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (ui.textarea.value.length === 0) return;
         if (confirm("Deseja apagar tudo?")) {
             ui.textarea.value = '';
-            speechManager.updateContext('');
             saveToCache();
             updateCharCount();
             ui.textarea.focus();
         }
     });
 
-    // 6. Docking / Janela (Lógica de Widget)
     function dockWindowBottomRight(targetWidth, targetHeight) {
         const screenLeft = window.screen.availLeft || 0;
         const screenTop = window.screen.availTop || 0;
         const posX = (screenLeft + window.screen.availWidth) - targetWidth - 10;
         const posY = (screenTop + window.screen.availHeight) - targetHeight - 10;
-
         try {
             window.resizeTo(targetWidth, targetHeight);
             window.moveTo(posX, posY);
@@ -257,7 +253,6 @@ document.addEventListener('DOMContentLoaded', () => {
     ui.toggleSizeBtn.addEventListener('click', () => {
         ui.container.classList.toggle('minimized');
         const isMinimized = ui.container.classList.contains('minimized');
-        
         if (isMinimized) {
             ui.iconMinimize.style.display = 'none';
             ui.iconMaximize.style.display = 'block';
@@ -269,10 +264,6 @@ document.addEventListener('DOMContentLoaded', () => {
             ui.toggleSizeBtn.title = "Compactar";
             dockWindowBottomRight(920, 800);
         }
-        
-        // Força redesenho do canvas após transição CSS
-        setTimeout(() => {
-            window.dispatchEvent(new Event('resize'));
-        }, 350);
+        setTimeout(() => { window.dispatchEvent(new Event('resize')); }, 350);
     });
 });
