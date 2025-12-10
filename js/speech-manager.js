@@ -11,6 +11,10 @@ class AudioVisualizer {
         this.animationId = null;
         this.isActive = false;
         
+        // Variáveis para detecção de sinal fraco
+        this.lowSignalCount = 0;
+        this.onSignalQuality = null; // Callback armazenado
+        
         // Ajuste inicial de DPI
         this.resize();
         window.addEventListener('resize', () => this.resize());
@@ -19,7 +23,6 @@ class AudioVisualizer {
     resize() {
         const dpr = window.devicePixelRatio || 1;
         const rect = this.canvas.getBoundingClientRect();
-        // Verifica se o elemento está visível antes de redimensionar
         if (rect.width > 0 && rect.height > 0) {
             this.canvas.width = rect.width * dpr;
             this.canvas.height = rect.height * dpr;
@@ -27,42 +30,42 @@ class AudioVisualizer {
         }
     }
 
-    async start(stream) {
+    async start(stream, onSignalQualityCallback) {
         if (this.isActive) return;
         
+        this.onSignalQuality = onSignalQualityCallback; // Registra callback
+        
         try {
-            // Cria contexto de áudio. O navegador geralmente ajusta a sampleRate para casar com o stream,
-            // mas podemos tentar sugerir alta qualidade.
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            
             const source = this.audioContext.createMediaStreamSource(stream);
             
             // --- CADEIA DSP ---
             
-            // 1. Filtro Passa-Alta (Remove ruídos graves/hum elétrico)
+            // 1. Filtro Passa-Alta
             const filter = this.audioContext.createBiquadFilter();
             filter.type = 'highpass';
             filter.frequency.value = 85;
 
-            // 2. Compressor (Nivela volume da voz)
+            // 2. Compressor
             const compressor = this.audioContext.createDynamicsCompressor();
             compressor.threshold.value = -50;
             compressor.knee.value = 40;
             compressor.ratio.value = 12;
 
-            // 3. Analisador (Para o visualizador)
+            // 3. Analisador
             this.analyser = this.audioContext.createAnalyser();
             this.analyser.fftSize = 256;
-            this.analyser.smoothingTimeConstant = 0.5; // Resposta mais rápida visualmente
+            this.analyser.smoothingTimeConstant = 0.5;
 
             // Conexões
             source.connect(filter);
             filter.connect(compressor);
             compressor.connect(this.analyser);
-            // Nota: Não conectamos ao destination para evitar feedback de áudio (eco)
 
             this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
             this.isActive = true;
+            this.lowSignalCount = 0; // Reset contador
+            
             this.draw();
             
         } catch (e) {
@@ -82,6 +85,29 @@ class AudioVisualizer {
         
         this.ctx.clearRect(0, 0, width, height);
 
+        // --- LÓGICA DE SINAL FRACO ---
+        // Calcula a média de "volume" atual
+        let sum = 0;
+        for(let i = 0; i < this.dataArray.length; i++) {
+            sum += this.dataArray[i];
+        }
+        const average = sum / this.dataArray.length;
+        
+        // Limiar de detecção (Ajustável)
+        // Se average for muito baixo, mas não zero (0 geralmente indica mute total ou erro)
+        if (average < 8 && average > 0) {
+            this.lowSignalCount++;
+        } else {
+            this.lowSignalCount = 0;
+        }
+
+        // Aproximadamente 3 segundos a 60fps (180 frames)
+        if (this.lowSignalCount > 180) {
+            if (this.onSignalQuality) this.onSignalQuality('weak');
+            this.lowSignalCount = 0; // Reseta para evitar spam de alertas
+        }
+        // ------------------------------
+
         // Configuração das barras
         const barWidth = (width / this.dataArray.length) * 2.5;
         let x = 0;
@@ -90,14 +116,10 @@ class AudioVisualizer {
             const value = this.dataArray[i];
             const percent = value / 255;
             
-            // Ganho visual para tornar o efeito mais perceptível
             const barHeight = height * percent * 1.0; 
-            
-            // Cor baseada na amplitude (Azul -> Roxo)
             const hue = 220 + (percent * 40); 
             this.ctx.fillStyle = `hsl(${hue}, 80%, ${50 + (percent * 10)}%)`;
 
-            // Desenha barra arredondada
             if (barHeight > 2) {
                 this.ctx.fillRect(x, height - barHeight, barWidth - 1, barHeight);
             }
@@ -123,13 +145,13 @@ class AudioVisualizer {
 export class SpeechManager {
     constructor(canvasElement, callbacks) {
         this.visualizer = new AudioVisualizer(canvasElement);
-        this.callbacks = callbacks; // { onResult, onStatus, onError }
+        this.callbacks = callbacks; // { onResult, onStatus, onError, onSignalQuality }
         
         this.recognition = null;
         this.isRecording = false;
         this.stream = null;
         this.manualStop = false;
-        this.currentText = ""; // Armazena o texto atual para formatação
+        this.currentText = ""; 
         
         // Configuração de Dispositivo (Default: Padrão do Sistema)
         this.selectedDeviceId = 'default';
@@ -137,11 +159,8 @@ export class SpeechManager {
         this.initSpeechAPI();
     }
 
-    // Método para definir qual dispositivo físico usar
     setDeviceId(deviceId) {
         this.selectedDeviceId = deviceId;
-        // Se estiver gravando, a mudança só terá efeito na próxima gravação
-        // O main.js já previne a troca durante a gravação.
     }
 
     initSpeechAPI() {
@@ -162,7 +181,6 @@ export class SpeechManager {
         };
 
         this.recognition.onend = () => {
-            // Lógica de resiliência: se não foi parada manual, tenta reiniciar
             if (!this.manualStop && this.isRecording) {
                 try {
                     this.recognition.start();
@@ -190,7 +208,7 @@ export class SpeechManager {
     }
 
     async toggle(currentFullText) {
-        this.currentText = currentFullText; // Atualiza contexto
+        this.currentText = currentFullText; 
         if (this.isRecording) {
             this.stop();
         } else {
@@ -201,28 +219,25 @@ export class SpeechManager {
     async start() {
         this.manualStop = false;
         try {
-            // 1. Configuração de Alta Fidelidade (Prioridade 3)
-            // Aqui definimos explicitamente como queremos que o navegador capture o áudio
+            // 1. Configuração de Alta Fidelidade
             const constraints = {
                 audio: {
-                    echoCancellation: true, // Remove eco
-                    noiseSuppression: true, // Remove ruído de fundo
-                    autoGainControl: true,  // Nivela o volume automaticamente
-                    channelCount: 1,        // Mono é ideal para reconhecimento de voz
-                    sampleRate: 48000       // Solicita qualidade de estúdio (48kHz)
+                    echoCancellation: true, 
+                    noiseSuppression: true, 
+                    autoGainControl: true,  
+                    channelCount: 1,        
+                    sampleRate: 48000       
                 }
             };
 
-            // Se o usuário selecionou um dispositivo específico, usamos o 'exact'
             if (this.selectedDeviceId && this.selectedDeviceId !== 'default') {
                 constraints.audio.deviceId = { exact: this.selectedDeviceId };
             }
 
-            // Obtém o Stream com as configurações aplicadas
             this.stream = await navigator.mediaDevices.getUserMedia(constraints);
 
-            // 2. Inicia o visualizador com o stream tratado
-            await this.visualizer.start(this.stream);
+            // 2. Inicia o visualizador passando o callback de qualidade de sinal
+            await this.visualizer.start(this.stream, this.callbacks.onSignalQuality);
 
             // 3. Inicia o reconhecimento
             this.recognition.start();
@@ -259,14 +274,10 @@ export class SpeechManager {
         }
 
         if (finalTranscriptChunk) {
-            // Aplica formatação básica (Capitalização) baseada no texto anterior
             const formattedChunk = this.formatText(finalTranscriptChunk, this.currentText);
             this.currentText += formattedChunk;
-            
-            // Envia texto final consolidado + interim
             this.callbacks.onResult(this.currentText, interimTranscript);
         } else {
-            // Apenas visualização do que está sendo dito agora
             this.callbacks.onResult(this.currentText, interimTranscript);
         }
     }
@@ -275,22 +286,17 @@ export class SpeechManager {
         let clean = newText.trim();
         if (!clean) return '';
         
-        // Verifica o último caractere do texto existente
         const lastChar = previousText.trim().slice(-1);
-        
-        // Decide se precisa de maiúscula (Início ou após pontuação)
         const needsCap = previousText.length === 0 || ['.', '!', '?', '\n'].includes(lastChar);
         
         if (needsCap) {
             clean = clean.charAt(0).toUpperCase() + clean.slice(1);
         }
         
-        // Adiciona espaço se necessário
         const needsSpace = previousText.length > 0 && !['\n'].includes(previousText.slice(-1));
         return (needsSpace ? ' ' : '') + clean;
     }
 
-    // Permite atualizar o texto base caso o usuário digite manualmente
     updateContext(text) {
         this.currentText = text;
     }
