@@ -7,7 +7,7 @@
 
 ## 📑 Visão Geral do Produto
 
-O **Ditado Digital Pro v3.1** evoluiu de um simples wrapper de API para uma aplicação de engenharia de voz completa que roda localmente no navegador. 
+O **Ditado Digital Pro** evoluiu de um simples wrapper de API para uma aplicação de engenharia de voz completa que roda localmente no navegador. 
 
 Nesta versão, abandonamos a captação de áudio crua em favor de um **Pipeline DSP (Digital Signal Processing)** profissional. O som da sua voz é limpo, comprimido e normalizado *antes* de chegar ao motor de reconhecimento, garantindo precisão superior mesmo em ambientes com ruído de ar-condicionado ou eco.
 
