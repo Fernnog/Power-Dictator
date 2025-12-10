@@ -19,6 +19,9 @@ document.addEventListener('DOMContentLoaded', () => {
         micBtn: document.getElementById('micBtn'), 
         micSpan: document.querySelector('#micBtn span'), 
         
+        // NOVO: Referência ao Seletor de Áudio (Deve ser criado no HTML conforme plano)
+        audioSelect: document.getElementById('audioSource'),
+
         charCount: document.getElementById('charCount'),
         statusMsg: document.getElementById('statusMsg'),
         saveStatus: document.getElementById('saveStatus'),
@@ -101,6 +104,60 @@ document.addEventListener('DOMContentLoaded', () => {
             onError: handleSpeechError
         }
     );
+
+    // =========================================================================
+    // LÓGICA DE SELEÇÃO DE DISPOSITIVOS (Prioridade 2)
+    // =========================================================================
+    async function loadAudioDevices() {
+        if (!ui.audioSelect) return;
+
+        try {
+            // Solicita permissão brevemente para obter os Rótulos (Labels) dos dispositivos
+            // Sem isso, o navegador retorna apenas IDs anônimos
+            await navigator.mediaDevices.getUserMedia({ audio: true });
+            
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const audioInputs = devices.filter(device => device.kind === 'audioinput');
+            
+            ui.audioSelect.innerHTML = ''; // Limpa lista atual
+            
+            // Opção Padrão
+            const defaultOption = document.createElement('option');
+            defaultOption.value = 'default';
+            defaultOption.text = 'Padrão do Sistema';
+            ui.audioSelect.appendChild(defaultOption);
+
+            // Popula com dispositivos reais
+            audioInputs.forEach(device => {
+                // Filtra duplicatas 'default' e 'communications' que o Windows cria
+                if (device.deviceId !== 'default' && device.deviceId !== 'communications') {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.text = device.label || `Microfone ${ui.audioSelect.length}`;
+                    ui.audioSelect.appendChild(option);
+                }
+            });
+
+        } catch (e) {
+            console.warn("Não foi possível listar dispositivos de áudio detalhados:", e);
+        }
+    }
+
+    // Carrega a lista ao iniciar
+    loadAudioDevices();
+
+    // Listener para troca de microfone
+    if (ui.audioSelect) {
+        ui.audioSelect.addEventListener('change', () => {
+            if (speechManager.isRecording) {
+                alert("Por favor, pare a gravação antes de trocar o microfone.");
+                // Reverte para a seleção anterior (opcional, requer lógica extra de estado)
+                return;
+            }
+            // Envia o ID escolhido para o SpeechManager
+            speechManager.setDeviceId(ui.audioSelect.value);
+        });
+    }
 
     // =========================================================================
     // LÓGICA DE DADOS (CACHE)
