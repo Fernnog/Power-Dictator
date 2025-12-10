@@ -72,8 +72,8 @@ body {
 .container.minimized .btn-legal,  
 .container.minimized .btn-copy,
 .container.minimized .status-bar,
-/* NOVO: Esconde o seletor de áudio no modo mini */
-.container.minimized .device-selector-container { 
+.container.minimized .device-selector-container,
+.container.minimized .header-actions { /* Esconde botões de topo no modo mini */
     display: none !important;
 }
 
@@ -91,6 +91,12 @@ body {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 0.5rem;
+}
+
+.header-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 .header-title h1 {
@@ -112,6 +118,13 @@ body {
     font-weight: 700;
 }
 
+/* Área de botões do cabeçalho (Versão + Ajuda) */
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 /* Botão de Versão (Pill) */
 .version-pill {
     background: #e5e7eb;
@@ -121,13 +134,31 @@ body {
     font-size: 0.7rem;
     color: var(--text-muted);
     cursor: pointer;
-    margin-left: 10px;
     transition: all 0.2s;
     font-weight: 600;
 }
 .version-pill:hover { 
     background: #d1d5db; 
     color: var(--text-main); 
+}
+
+/* Botão de Ajuda (Novo) */
+.btn-help {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 50%;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.btn-help:hover {
+    background: #e0e7ff;
+    color: var(--c-mic);
+    transform: scale(1.1);
 }
 
 .subtitle {
@@ -491,7 +522,7 @@ textarea {
 #fileInput { display: none; }
 
 /* =============================================== */
-/* 8. MODAL (NOVO)                                 */
+/* 8. MODAL & ELEMENTOS GERAIS DE AJUDA            */
 /* =============================================== */
 .modal-overlay {
     position: fixed; 
@@ -576,19 +607,57 @@ textarea {
     to { transform: translateY(0); opacity: 1; }
 }
 
+/* --- ESTILOS DE AJUDA & TECLAS (v1.0.1) --- */
+
+/* Estilização de "Teclas" (KBD tag) */
+kbd {
+    background-color: #f3f4f6;
+    border: 1px solid #d1d5db;
+    border-bottom-width: 3px; /* Efeito 3D */
+    border-radius: 6px;
+    padding: 2px 6px;
+    font-family: 'Inter', monospace;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #374151;
+    display: inline-block;
+    min-width: 20px;
+    text-align: center;
+    margin: 0 2px;
+}
+
+/* Tabela de Ajuda dentro do Modal */
+.help-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+.help-table th, .help-table td {
+    text-align: left;
+    padding: 12px 8px;
+    border-bottom: 1px solid var(--border);
+}
+.help-table th {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.help-desc {
+    font-size: 0.9rem;
+    color: var(--text-main);
+}
+
 /* =============================================== */
-/* 9. NOTIFICAÇÕES (TOAST) - NOVO v1.0.1           */
+/* 9. NOTIFICAÇÕES TOAST (REDE DE SEGURANÇA)       */
 /* =============================================== */
 .toast-container {
     position: fixed;
     bottom: 20px;
     left: 50%;
     transform: translateX(-50%);
-    z-index: 2000; /* Z-Index alto para ficar acima de tudo */
+    z-index: 1000;
     pointer-events: none; /* Permite clicar através do container vazio */
-    width: 100%;
-    display: flex;
-    justify-content: center;
 }
 
 .toast {
@@ -601,7 +670,7 @@ textarea {
     align-items: center;
     gap: 12px;
     font-size: 0.9rem;
-    pointer-events: auto; /* Reativa cliques no toast específico */
+    pointer-events: auto;
     animation: slideUpFade 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -614,15 +683,9 @@ textarea {
     cursor: pointer;
     font-weight: 600;
     transition: all 0.2s;
-    font-family: inherit;
-    font-size: 0.8rem;
 }
 
-.btn-undo:hover { 
-    background: rgba(255,255,255,0.1); 
-    color: #a5b4fc; 
-    border-color: #a5b4fc;
-}
+.btn-undo:hover { background: rgba(255,255,255,0.1); color: #a5b4fc; }
 
 @keyframes slideUpFade {
     from { opacity: 0; transform: translateY(20px); }
