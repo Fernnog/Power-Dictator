@@ -2,7 +2,6 @@
 > **Engenharia de Áudio DSP + Inteligência Artificial Contextual.**
 > *A ferramenta definitiva para transcrição jurídica e teológica com Zero Latência.*
 
-![Version](https://img.shields.io/badge/version-3.1.0-blue.svg)
 ![Status](https://img.shields.io/badge/status-stable-success.svg)
 ![Technology](https://img.shields.io/badge/tech-Web_Audio_API_%7C_Vanilla_JS_%7C_Gemini_Flash-indigo.svg)
 
