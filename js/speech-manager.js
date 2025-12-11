@@ -1,5 +1,3 @@
---- START OF FILE js/speech-manager.js ---
-
 export class SpeechManager {
     constructor(visualizerCanvasId, onResultCallback, onStatusChange) {
         this.isRecording = false;
@@ -66,29 +64,52 @@ export class SpeechManager {
     }
 
     /**
-     * Lista os dispositivos de áudio disponíveis.
-     * Importante: Requer permissão prévia para mostrar os labels.
+     * Escuta mudanças físicas nos dispositivos (ex: plugar USB)
+     */
+    listenToDeviceChanges(callback) {
+        navigator.mediaDevices.ondevicechange = async () => {
+            const devices = await this.getAudioDevices();
+            callback(devices);
+        };
+    }
+
+    /**
+     * Lista os dispositivos de áudio de forma robusta.
+     * Se os labels estiverem vazios (bloqueio de privacidade), força um pedido de permissão.
      */
     async getAudioDevices() {
-        // Pede permissão temporária apenas para desbloquear os labels, se necessário
         try {
-            if (!this.mediaStream) {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                stream.getTracks().forEach(t => t.stop()); // Fecha imediatamente
+            // 1. Tenta listagem inicial
+            let devices = await navigator.mediaDevices.enumerateDevices();
+            let audioDevices = devices.filter(d => d.kind === 'audioinput');
+
+            // 2. Verifica se temos dispositivos mas sem nomes (Fingerprinting Protection)
+            const hasLabels = audioDevices.some(d => d.label !== "");
+            
+            // Se encontrou devices mas todos estão sem nome, força o desbloqueio
+            if (!hasLabels && audioDevices.length > 0) {
+                try {
+                    // Abre um stream relâmpago apenas para liberar os labels
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    stream.getTracks().forEach(t => t.stop()); // Fecha imediatamente
+                    
+                    // 3. Tenta listar novamente, agora com permissão concedida
+                    devices = await navigator.mediaDevices.enumerateDevices();
+                    audioDevices = devices.filter(d => d.kind === 'audioinput');
+                } catch (permErr) {
+                    console.warn("Permissão para listar nomes de dispositivos negada pelo usuário.", permErr);
+                }
             }
             
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            return devices.filter(device => device.kind === 'audioinput');
+            return audioDevices;
         } catch (err) {
-            console.error("Erro ao listar dispositivos:", err);
+            console.error("Erro crítico ao listar dispositivos:", err);
             return [];
         }
     }
 
     setDeviceId(deviceId) {
         this.selectedDeviceId = deviceId;
-        // Se estiver gravando, precisaria reiniciar para trocar (implementação futura)
-        // Por enquanto, aplica na próxima gravação.
     }
 
     async start() {
@@ -109,8 +130,6 @@ export class SpeechManager {
             this.startAudioVisualization(this.mediaStream);
 
             // 2. Inicia o reconhecimento de texto
-            // Nota: A Web Speech API do Chrome infelizmente ignora o deviceId 
-            // e usa o padrão do sistema em muitos casos, mas o AudioContext (Visualizer) usará o correto.
             this.isRecording = true;
             this.recognition.start();
 
@@ -179,4 +198,3 @@ export class SpeechManager {
         }
     }
 }
---- END OF FILE js/speech-manager.js ---
