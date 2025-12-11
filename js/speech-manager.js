@@ -5,9 +5,11 @@ export class SpeechManager {
         this.audioContext = null;
         this.mediaStream = null;
         this.analyser = null;
+        
+        // Referência ao Canvas com proteção contra nulo
         this.canvas = document.getElementById(visualizerCanvasId);
-        // Proteção caso o canvas não exista no DOM no momento da carga
         this.canvasCtx = this.canvas ? this.canvas.getContext('2d') : null; 
+        
         this.onResult = onResultCallback;
         this.onStatus = onStatusChange;
         
@@ -126,8 +128,7 @@ export class SpeechManager {
         if (this.isRecording) return;
         
         try {
-            // 1. Inicia visualizador IMEDIATAMENTE.
-            // Isso garante que o AudioContext seja criado/resumido dentro do gesto do usuário (clique).
+            // 1. Inicia/Resume Contexto de Áudio (Crucial para visualizador)
             if (!this.audioContext) {
                 this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
             }
@@ -135,20 +136,31 @@ export class SpeechManager {
                 await this.audioContext.resume();
             }
 
-            // 2. Configura Stream de Áudio
-            const constraints = {
-                audio: {
-                    deviceId: this.selectedDeviceId && this.selectedDeviceId !== 'default' 
-                        ? { exact: this.selectedDeviceId } 
-                        : undefined,
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true
-                }
-            };
+            // 2. Configura Stream de Áudio com FALLBACK
+            // Se o ID salvo não existir mais, o código não quebra; ele usa o padrão.
+            let stream;
             
-            this.mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+            try {
+                const constraints = {
+                    audio: {
+                        deviceId: this.selectedDeviceId && this.selectedDeviceId !== 'default' 
+                            ? { exact: this.selectedDeviceId } 
+                            : undefined,
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                };
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                
+            } catch (deviceErr) {
+                console.warn("Microfone específico falhou ou não encontrado. Usando padrão.", deviceErr);
+                // Fallback: Tenta pegar o áudio padrão sem restrições
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            }
             
+            this.mediaStream = stream;
+
             // Conecta o stream ao visualizador
             this.startAudioVisualization(this.mediaStream);
 
@@ -157,9 +169,10 @@ export class SpeechManager {
             this.recognition.start();
 
         } catch (err) {
-            console.error("Erro ao iniciar áudio:", err);
+            console.error("Erro CRÍTICO ao iniciar áudio:", err);
             this.onStatus('error');
-            alert("Erro ao acessar microfone. Verifique permissões e conexão.");
+            alert("Erro ao acessar microfone. Verifique se o dispositivo está conectado.");
+            this.isRecording = false;
         }
     }
 
@@ -171,8 +184,9 @@ export class SpeechManager {
         this.stopAudioVisualization();
     }
 
-    // --- Lógica do Visualizador (Osciloscópio OTIMIZADO v1.0.4) ---
+    // --- Lógica do Visualizador (Osciloscópio OTIMIZADO) ---
     async startAudioVisualization(stream) {
+        // Se o canvas não existe (erro de HTML), aborta silenciosamente
         if (!this.canvasCtx) return;
 
         // Garante robustez do AudioContext
@@ -192,14 +206,13 @@ export class SpeechManager {
         const bufferLength = this.analyser.frequencyBinCount;
         const dataArray = new Uint8Array(bufferLength);
 
-        // Variáveis para otimização de renderização (evitar Layout Thrashing)
+        // Variáveis para otimização (evita Layout Thrashing)
         let isSignalStrong = false;
-        // Tenta pegar a área de texto para feedback no modo widget, caso exista
         const feedbackTarget = document.querySelector('.editor-area'); 
         const canvasTarget = this.canvas;
 
         const draw = () => {
-            // Se parou de gravar, encerra o loop de animação
+            // Se parou de gravar, encerra o loop
             if (!this.isRecording) return;
             
             requestAnimationFrame(draw);
@@ -207,43 +220,38 @@ export class SpeechManager {
             this.analyser.getByteTimeDomainData(dataArray);
 
             // Limpa Canvas
-            this.canvasCtx.fillStyle = '#f9fafb'; // Cor de fundo do app
+            this.canvasCtx.fillStyle = '#f9fafb'; 
             this.canvasCtx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
             const centerY = this.canvas.height / 2;
-            // Define limite de "sinal útil" (15% da altura)
-            const threshold = this.canvas.height * 0.15; 
+            const threshold = this.canvas.height * 0.15; // 15% de sensibilidade
 
             // 1. Desenha Linha de Threshold (Pontilhada Vermelha)
             this.canvasCtx.beginPath();
-            this.canvasCtx.setLineDash([4, 4]); // Padrão tracejado
-            this.canvasCtx.strokeStyle = 'rgba(239, 68, 68, 0.3)'; // Vermelho suave
+            this.canvasCtx.setLineDash([4, 4]); 
+            this.canvasCtx.strokeStyle = 'rgba(239, 68, 68, 0.3)';
             this.canvasCtx.lineWidth = 1;
             
-            // Linha Superior
             this.canvasCtx.moveTo(0, centerY - threshold);
             this.canvasCtx.lineTo(this.canvas.width, centerY - threshold);
-            
-            // Linha Inferior
             this.canvasCtx.moveTo(0, centerY + threshold);
             this.canvasCtx.lineTo(this.canvas.width, centerY + threshold);
             this.canvasCtx.stroke();
 
             // 2. Desenha Onda de Áudio
-            this.canvasCtx.setLineDash([]); // Restaura linha sólida
+            this.canvasCtx.setLineDash([]); 
             this.canvasCtx.lineWidth = 2;
-            this.canvasCtx.strokeStyle = '#4f46e5'; // Cor Indigo
+            this.canvasCtx.strokeStyle = '#4f46e5'; 
             this.canvasCtx.beginPath();
 
             const sliceWidth = this.canvas.width * 1.0 / bufferLength;
             let x = 0;
-            let maxAmplitude = 0; // Para calcular força do sinal
+            let maxAmplitude = 0; 
 
             for (let i = 0; i < bufferLength; i++) {
-                const v = dataArray[i] / 128.0; // Normaliza byte (0..255) para float
+                const v = dataArray[i] / 128.0; 
                 const y = v * centerY;
                 
-                // Calcula o pico de volume atual
                 const amplitude = Math.abs(y - centerY);
                 if (amplitude > maxAmplitude) maxAmplitude = amplitude;
 
@@ -257,19 +265,15 @@ export class SpeechManager {
             this.canvasCtx.stroke();
             
             // 3. Feedback Visual OTIMIZADO
-            // Verifica se o sinal ultrapassou o threshold (alguém está falando)
             const currentSignalStrong = maxAmplitude > threshold;
             
-            // Só altera classes CSS se o estado mudou (Performance Saver)
             if (currentSignalStrong !== isSignalStrong) {
                 isSignalStrong = currentSignalStrong;
                 
                 if (isSignalStrong) {
-                    // Adiciona brilho verde
                     canvasTarget.classList.add('audio-detected');
                     if (feedbackTarget) feedbackTarget.classList.add('audio-detected');
                 } else {
-                    // Remove brilho
                     canvasTarget.classList.remove('audio-detected');
                     if (feedbackTarget) feedbackTarget.classList.remove('audio-detected');
                 }
