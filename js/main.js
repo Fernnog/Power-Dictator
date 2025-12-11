@@ -155,6 +155,12 @@ const handleTranscriptionResult = (finalText, interimText) => {
         
         saveContent();
         updateCharCount();
+
+        // [v1.0.4] Auto-Scroll Inteligente
+        // Se estiver no modo minimizado (onde o espaço é curto), rola para baixo
+        if (ui.container.classList.contains('minimized')) {
+            ui.textarea.scrollTop = ui.textarea.scrollHeight;
+        }
     }
 };
 
@@ -342,7 +348,7 @@ function performUndo() {
 }
 
 // ========================================================
-// 8. REDIMENSIONAMENTO DE JANELA (Widget Mode)
+// 8. REDIMENSIONAMENTO DE JANELA (Widget Mode v1.0.4)
 // ========================================================
 ui.toggleSizeBtn.addEventListener('click', () => {
     ui.container.classList.toggle('minimized');
@@ -352,9 +358,9 @@ ui.toggleSizeBtn.addEventListener('click', () => {
     document.getElementById('iconMinimize').style.display = isMin ? 'none' : 'block';
     document.getElementById('iconMaximize').style.display = isMin ? 'block' : 'none';
     
-    // Dimensões Alvo (Normal vs Widget Compacto)
-    const targetWidth = isMin ? 380 : 920; 
-    const targetHeight = isMin ? 120 : 800;
+    // Dimensões Alvo (Normal vs Widget Vertical Post-it)
+    const targetWidth = isMin ? 360 : 920; 
+    const targetHeight = isMin ? 500 : 800; // Altura ajustada para leitura
 
     // Se estiver rodando como popup (janela independente)
     if (window.outerWidth) {
@@ -364,7 +370,7 @@ ui.toggleSizeBtn.addEventListener('click', () => {
             const screenW = window.screen.availWidth;
             const screenH = window.screen.availHeight;
 
-            // Calcula posição: Canto Inferior Direito com margem
+            // Calcula posição: Canto Inferior Direito com margem de segurança
             const left = (screenLeft + screenW) - targetWidth - 20;
             const top = (screenTop + screenH) - targetHeight - 20;
 
@@ -373,6 +379,13 @@ ui.toggleSizeBtn.addEventListener('click', () => {
         } catch (e) {
             console.warn("Navegador bloqueou resizeTo.", e);
         }
+    }
+    
+    // [v1.0.4] Auto-scroll imediato ao minimizar para ver o texto recente
+    if (isMin) {
+        setTimeout(() => {
+            ui.textarea.scrollTop = ui.textarea.scrollHeight;
+        }, 100);
     }
 });
 
