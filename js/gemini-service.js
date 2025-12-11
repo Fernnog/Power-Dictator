@@ -1,54 +1,76 @@
-export class GeminiService {
-    constructor() {
-        this.config = {
-            model: 'gemini-flash-latest', // Atualizado para nomenclatura mais recente/estável
-            storageKeyApi: 'ditado_digital_gemini_key'
-        };
-    }
+--- START OF FILE js/gemini-service.js ---
 
-    /**
-     * Recupera ou solicita a API Key do LocalStorage/Prompt
-     */
+/**
+ * Serviço de Integração com Google Gemini (AI)
+ * Responsável pela comunicação com a API para correção e formatação.
+ */
+
+const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+
+export const aiService = {
+    
+    // Recupera a chave salva ou retorna null
     getApiKey() {
-        let key = localStorage.getItem(this.config.storageKeyApi);
-        if (!key) {
-            key = prompt("🔑 Insira sua API Key do Google Gemini:\n(Você pode obter no Google AI Studio)");
-            if (key) localStorage.setItem(this.config.storageKeyApi, key.trim());
-        }
-        return key;
-    }
+        return localStorage.getItem('dd_gemini_key');
+    },
 
-    /**
-     * Envia payload para a API do Gemini
-     * @param {Object} payload - O corpo da requisição (contents)
-     */
-    async generate(payload) {
-        const apiKey = this.getApiKey();
-        if (!apiKey) {
-            throw new Error("API Key não fornecida.");
+    // Salva a chave e testa (simples)
+    saveApiKey(key) {
+        if (!key.startsWith('AIza')) {
+            alert('A chave parece inválida. Ela geralmente começa com "AIza".');
+            return false;
+        }
+        localStorage.setItem('dd_gemini_key', key);
+        return true;
+    },
+
+    // Método genérico para chamar a API
+    async generateText(promptText) {
+        const key = this.getApiKey();
+        if (!key) {
+            const newKey = prompt("Insira sua Google Gemini API Key (Obtenha em aistudio.google.com):");
+            if (newKey && this.saveApiKey(newKey)) {
+                return this.generateText(promptText); // Tenta de novo recursivamente
+            }
+            throw new Error("API Key não configurada.");
         }
 
         try {
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${this.config.model}:generateContent?key=${apiKey}`, {
+            const response = await fetch(`${API_URL}?key=${key}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{ text: promptText }]
+                    }]
+                })
             });
 
             const data = await response.json();
 
             if (data.error) {
-                // Se a chave for inválida, limpa para pedir de novo na próxima
-                if (data.error.code === 400 || data.error.code === 403) {
-                    localStorage.removeItem(this.config.storageKeyApi);
-                }
                 throw new Error(data.error.message);
             }
-            
-            return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+
+            // Extrai o texto da resposta complexa do Gemini
+            return data.candidates[0].content.parts[0].text;
+
         } catch (error) {
-            console.error("Gemini API Error:", error);
+            console.error("Erro Gemini:", error);
             throw error;
         }
+    },
+
+    // Wrapper: Corrigir Gramática
+    async fixGrammar(text) {
+        const prompt = `Corrija a gramática e pontuação do seguinte texto (pt-BR), mantendo o tom original e sem adicionar comentários ou aspas: \n\n"${text}"`;
+        return await this.generateText(prompt);
+    },
+
+    // Wrapper: Converter para Jurídico
+    async convertToLegal(text) {
+        const prompt = `Reescreva o seguinte texto em linguagem jurídica formal (advocacia), corrigindo erros de fonética comuns em ditados, sem adicionar comentários extras: \n\n"${text}"`;
+        return await this.generateText(prompt);
     }
-}
+};
+--- END OF FILE js/gemini-service.js ---
