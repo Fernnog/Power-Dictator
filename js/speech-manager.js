@@ -137,7 +137,6 @@ export class SpeechManager {
             }
 
             // 2. Configura Stream de Áudio com FALLBACK
-            // Se o ID salvo não existir mais, o código não quebra; ele usa o padrão.
             let stream;
             
             try {
@@ -155,17 +154,19 @@ export class SpeechManager {
                 
             } catch (deviceErr) {
                 console.warn("Microfone específico falhou ou não encontrado. Usando padrão.", deviceErr);
-                // Fallback: Tenta pegar o áudio padrão sem restrições
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             }
             
             this.mediaStream = stream;
 
-            // Conecta o stream ao visualizador
+            // --- CORREÇÃO CRÍTICA AQUI ---
+            // Primeiro definimos que ESTAMOS gravando.
+            this.isRecording = true; 
+            
+            // DEPOIS iniciamos o visualizador (que depende da flag true para rodar).
             this.startAudioVisualization(this.mediaStream);
 
-            // 3. Inicia reconhecimento de voz
-            this.isRecording = true;
+            // Por fim, iniciamos o reconhecimento de texto.
             this.recognition.start();
 
         } catch (err) {
@@ -186,7 +187,6 @@ export class SpeechManager {
 
     // --- Lógica do Visualizador (Osciloscópio OTIMIZADO) ---
     async startAudioVisualization(stream) {
-        // Se o canvas não existe (erro de HTML), aborta silenciosamente
         if (!this.canvasCtx) return;
 
         // Garante robustez do AudioContext
@@ -212,7 +212,8 @@ export class SpeechManager {
         const canvasTarget = this.canvas;
 
         const draw = () => {
-            // Se parou de gravar, encerra o loop
+            // Se isRecording for false, o loop morre aqui.
+            // Graças à correção no método start(), isso agora será true na primeira execução.
             if (!this.isRecording) return;
             
             requestAnimationFrame(draw);
@@ -293,7 +294,5 @@ export class SpeechManager {
         if (this.canvas) this.canvas.classList.remove('audio-detected');
         const feedbackTarget = document.querySelector('.editor-area');
         if (feedbackTarget) feedbackTarget.classList.remove('audio-detected');
-
-        // Nota: Não fechamos o audioContext para permitir reuso rápido
     }
 }
