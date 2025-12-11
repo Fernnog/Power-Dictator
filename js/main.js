@@ -1,5 +1,3 @@
---- START OF FILE js/main.js ---
-
 import { SpeechManager } from './speech-manager.js';
 import { aiService } from './gemini-service.js';
 import { changelogData, currentVersion } from './changelog.js';
@@ -477,5 +475,3 @@ window.addEventListener('DOMContentLoaded', () => {
     // Expor SpeechManager globalmente para debug (opcional)
     window.speechManager = speechManager;
 });
-
---- END OF FILE js/main.js ---
