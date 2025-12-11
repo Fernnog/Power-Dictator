@@ -1,6 +1,8 @@
 import { SpeechManager } from './speech-manager.js';
 import { aiService } from './gemini-service.js';
 import { changelogData, currentVersion } from './changelog.js';
+import Glossary from './glossary.js';
+import { CONFIG } from './config.js';
 
 // ========================================================
 // 1. REFERÊNCIAS DE UI (DOM Elements)
@@ -34,9 +36,9 @@ const ui = {
     closeModalBtn: document.getElementById('closeModalBtn'),
     toastContainer: document.getElementById('toastContainer'),
 
-    // Novo: Glossário
-    glossaryBtn: document.getElementById('glossaryBtn'), // Botão precisa ser criado no HTML
-    glossaryModal: document.getElementById('glossaryModal'), // Modal precisa ser criado no HTML
+    // Glossário
+    glossaryBtn: document.getElementById('glossaryBtn'),
+    glossaryModal: document.getElementById('glossaryModal'),
     closeGlossaryBtn: document.getElementById('closeGlossaryBtn'),
     glossaryList: document.getElementById('glossaryList'),
     termInput: document.getElementById('termInput'),
@@ -49,116 +51,105 @@ let undoTimeout = null;
 let tempDeletedText = '';
 
 // ========================================================
-// 2. MÓDULO GLOSSÁRIO (Novidade v1.0.2)
+// 2. WAKE LOCK (Modo Insônia)
 // ========================================================
-const Glossary = {
-    terms: JSON.parse(localStorage.getItem('dd_glossary')) || [],
-
-    add(from, to) {
-        if (!from || !to) return;
-        this.terms.push({ from: from.toLowerCase(), to });
-        this.save();
-        this.render();
-        ui.termInput.value = '';
-        ui.replaceInput.value = '';
-    },
-
-    remove(index) {
-        this.terms.splice(index, 1);
-        this.save();
-        this.render();
-    },
-
-    save() {
-        localStorage.setItem('dd_glossary', JSON.stringify(this.terms));
-    },
-
-    // Aplica as substituições no texto recebido
-    process(text) {
-        let processed = text;
-        this.terms.forEach(term => {
-            // Regex global, case-insensitive, palavra inteira ou fronteira
-            const regex = new RegExp(`\\b${term.from}\\b`, 'gi');
-            processed = processed.replace(regex, term.to);
-        });
-        return processed;
-    },
-
-    render() {
-        if (!ui.glossaryList) return;
-        ui.glossaryList.innerHTML = '';
-        if (this.terms.length === 0) {
-            ui.glossaryList.innerHTML = '<p style="color:#9ca3af; text-align:center;">Nenhum termo cadastrado.</p>';
-            return;
+let wakeLock = null;
+const toggleWakeLock = async (shouldLock) => {
+    if ('wakeLock' in navigator) {
+        try {
+            if (shouldLock && !wakeLock) {
+                wakeLock = await navigator.wakeLock.request('screen');
+            } else if (!shouldLock && wakeLock) {
+                await wakeLock.release();
+                wakeLock = null;
+            }
+        } catch (err) {
+            console.warn('Wake Lock não disponível:', err);
         }
-
-        this.terms.forEach((term, index) => {
-            const div = document.createElement('div');
-            div.className = 'glossary-item'; // Classe definida no CSS
-            div.innerHTML = `
-                <span><strong>${term.from}</strong> ➝ ${term.to}</span>
-                <button class="btn-delete-term" data-index="${index}">&times;</button>
-            `;
-            ui.glossaryList.appendChild(div);
-        });
-
-        // Event listeners para deletar
-        document.querySelectorAll('.btn-delete-term').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                this.remove(parseInt(e.target.dataset.index));
-            });
-        });
     }
 };
 
-// ========================================================
-// 3. FLUXO SEGURO (AUTO-STOP) (Novidade v1.0.2)
-// ========================================================
+// Recupera o lock se a aba perder e recuperar visibilidade
+document.addEventListener('visibilitychange', async () => {
+    if (wakeLock !== null && document.visibilityState === 'visible') {
+        try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e){}
+    }
+});
 
-/**
- * Garante que o microfone seja desligado antes de executar ações críticas.
- * Evita conflitos de áudio e erros de estado.
- */
+// ========================================================
+// 3. GLOSSÁRIO (Instanciação do Módulo)
+// ========================================================
+const glossaryManager = new Glossary((terms) => {
+    // Callback de renderização
+    if (!ui.glossaryList) return;
+    ui.glossaryList.innerHTML = '';
+    
+    if (terms.length === 0) {
+        ui.glossaryList.innerHTML = '<p style="color:#9ca3af; text-align:center;">Nenhum termo cadastrado.</p>';
+        return;
+    }
+
+    terms.forEach((term, index) => {
+        const div = document.createElement('div');
+        div.className = 'glossary-item';
+        div.innerHTML = `
+            <span class="term-pair">
+                <span class="term-from">${term.from}</span>
+                <span class="term-arrow">➜</span>
+                <span class="term-to">${term.to}</span>
+            </span>
+            <button class="btn-delete-term" data-index="${index}">&times;</button>
+        `;
+        ui.glossaryList.appendChild(div);
+    });
+
+    // Event listeners para deletar
+    document.querySelectorAll('.btn-delete-term').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            glossaryManager.remove(parseInt(e.target.dataset.index));
+        });
+    });
+});
+
+// ========================================================
+// 4. AUTO-STOP & SEGURANÇA
+// ========================================================
 const executeSafely = async (actionCallback) => {
     if (speechManager && speechManager.isRecording) {
-        // 1. Para a gravação
         speechManager.stop();
+        toggleWakeLock(false);
         
-        // 2. Feedback visual de transição (Laranja)
+        // Feedback visual
         const originalColor = ui.micBtn.style.backgroundColor;
-        ui.micBtn.style.backgroundColor = '#f59e0b'; // Amber
+        ui.micBtn.style.backgroundColor = '#f59e0b'; // Amber warning
         
-        // 3. Aguarda o encerramento do stream (pequeno delay técnico)
         await new Promise(resolve => setTimeout(resolve, 300));
-        
-        ui.micBtn.style.backgroundColor = ''; // Restaura cor original
+        ui.micBtn.style.backgroundColor = '';
     }
-    // 4. Executa a ação
     actionCallback();
 };
 
 // ========================================================
-// 4. GERENCIAMENTO DE ÁUDIO & DISPOSITIVOS
+// 5. CALLBACKS DO SPEECH MANAGER
 // ========================================================
-
 const handleTranscriptionResult = (finalText, interimText) => {
     if (finalText) {
-        // Processa o texto com o Glossário antes de inserir
-        const processedText = Glossary.process(finalText);
+        // Processa texto com Glossário
+        const processedText = glossaryManager.process(finalText);
         
-        // Insere o texto onde o cursor está ou no final
+        // Insere no cursor
         const start = ui.textarea.selectionStart;
         const end = ui.textarea.selectionEnd;
         const text = ui.textarea.value;
         const before = text.substring(0, start);
         const after = text.substring(end, text.length);
         
-        // Adiciona espaço automático se necessário
+        // Adiciona espaço inteligente
         const prefix = (before.length > 0 && !before.endsWith(' ') && !before.endsWith('\n')) ? ' ' : '';
         
         ui.textarea.value = before + prefix + processedText + after;
         
-        // Move o cursor para o final do novo texto
+        // Move cursor
         const newCursorPos = start + prefix.length + processedText.length;
         ui.textarea.setSelectionRange(newCursorPos, newCursorPos);
         
@@ -181,6 +172,7 @@ const updateStatus = (status) => {
         ui.statusMsg.textContent = "ERRO / MICROFONE BLOQUEADO";
         ui.statusMsg.classList.add('active', 'status-error');
         ui.micBtn.classList.remove('recording');
+        toggleWakeLock(false);
     } else {
         ui.statusMsg.textContent = "";
         ui.statusMsg.classList.remove('active');
@@ -188,56 +180,68 @@ const updateStatus = (status) => {
     }
 };
 
-// Instancia o Gerenciador de Áudio
 const speechManager = new SpeechManager('audioVisualizer', handleTranscriptionResult, updateStatus);
 
-// Inicializa o Seletor de Dispositivos (Headsets)
+// ========================================================
+// 6. SELETOR DE DISPOSITIVOS (Com Persistência)
+// ========================================================
 async function initDeviceSelector() {
-    // Tenta obter dispositivos. O navegador pode pedir permissão aqui.
-    const devices = await speechManager.getAudioDevices();
-    
-    ui.audioSource.innerHTML = '<option value="default">Padrão do Sistema</option>';
-    
-    devices.forEach(device => {
-        const option = document.createElement('option');
-        option.value = device.deviceId;
-        // Se label vazio (permissão negada/pendente), usa nome genérico
-        option.text = device.label || `Microfone ${ui.audioSource.length}`;
-        ui.audioSource.appendChild(option);
-    });
+    const populate = (devices) => {
+        ui.audioSource.innerHTML = '<option value="default">Padrão do Sistema</option>';
+        const savedId = localStorage.getItem(CONFIG.STORAGE_KEYS.MIC);
+        
+        devices.forEach(device => {
+            const option = document.createElement('option');
+            option.value = device.deviceId;
+            option.text = device.label || `Microfone (${device.deviceId.slice(0,5)}...)`;
+            if (device.deviceId === savedId) option.selected = true;
+            ui.audioSource.appendChild(option);
+        });
+        
+        if (savedId) speechManager.setDeviceId(savedId);
+    };
 
+    // 1. Carrega inicial
+    const devices = await speechManager.getAudioDevices();
+    populate(devices);
+
+    // 2. Listener de Hotplug (USB conecta/desconecta)
+    speechManager.listenToDeviceChanges((updatedDevices) => populate(updatedDevices));
+
+    // 3. Salva preferência
     ui.audioSource.addEventListener('change', (e) => {
-        speechManager.setDeviceId(e.target.value);
-        // Feedback visual
+        const val = e.target.value;
+        speechManager.setDeviceId(val);
+        localStorage.setItem(CONFIG.STORAGE_KEYS.MIC, val);
+        
         ui.audioSource.style.borderColor = '#4f46e5';
         setTimeout(() => ui.audioSource.style.borderColor = '', 300);
     });
 }
 
 // ========================================================
-// 5. EVENT LISTENERS & AÇÕES
+// 7. EVENT LISTENERS
 // ========================================================
 
-// Botão Gravar (Toggle)
+// Botão Gravar
 ui.micBtn.addEventListener('click', () => {
     if (speechManager.isRecording) {
         speechManager.stop();
+        toggleWakeLock(false);
     } else {
         speechManager.start();
+        toggleWakeLock(true);
     }
 });
 
-// Botão Upload (Leitura de Arquivo Texto/Áudio Simulado)
-ui.fileInput.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (file) {
-        executeSafely(() => {
-            alert("Upload de áudio para transcrição offline requer processamento server-side pesado.\n\nNa versão Client-Side, suportamos apenas leitura de arquivos .txt para edição.");
-        });
-    }
+// Upload
+ui.fileInput.addEventListener('change', () => {
+    executeSafely(() => {
+        alert("Upload de áudio requer backend. Suporte apenas para arquivos de texto no momento.");
+    });
 });
 
-// Botão Corrigir Gramática (AI)
+// IA: Gramática
 ui.btnAiFix.addEventListener('click', () => {
     const text = ui.textarea.value.trim();
     if (!text) return alert("Digite ou dite algo primeiro.");
@@ -248,7 +252,7 @@ ui.btnAiFix.addEventListener('click', () => {
             const result = await aiService.fixGrammar(text);
             ui.textarea.value = result;
             saveContent();
-            updateStatus('success'); // Implementar feedback temporário se desejar
+            updateStatus('success');
         } catch (error) {
             alert("Erro na IA: " + error.message);
             updateStatus('error');
@@ -258,7 +262,7 @@ ui.btnAiFix.addEventListener('click', () => {
     });
 });
 
-// Botão Jurídico (AI)
+// IA: Jurídico
 ui.btnAiLegal.addEventListener('click', () => {
     const text = ui.textarea.value.trim();
     if (!text) return alert("Digite ou dite algo primeiro.");
@@ -279,16 +283,16 @@ ui.btnAiLegal.addEventListener('click', () => {
     });
 });
 
-// Botão Copiar
+// Copiar
 ui.btnCopy.addEventListener('click', () => {
     executeSafely(() => {
         ui.textarea.select();
-        document.execCommand('copy'); // Fallback ou Clipboard API
+        document.execCommand('copy');
         navigator.clipboard.writeText(ui.textarea.value);
         
         const originalText = ui.btnCopy.querySelector('span').textContent;
         ui.btnCopy.querySelector('span').textContent = "Copiado!";
-        ui.btnCopy.classList.add('status-success'); // Classe visual se existir
+        ui.btnCopy.classList.add('status-success');
         
         setTimeout(() => {
             ui.btnCopy.querySelector('span').textContent = originalText;
@@ -297,46 +301,32 @@ ui.btnCopy.addEventListener('click', () => {
     });
 });
 
-// Botão Limpar com Undo (Toast)
-ui.btnClear.addEventListener('click', () => {
-    executeSafely(() => handleClearAction());
-});
+// Limpar com Undo
+ui.btnClear.addEventListener('click', () => executeSafely(() => handleClearAction()));
 
 function handleClearAction() {
     if (!ui.textarea.value) return;
-
-    // 1. Salva estado para Undo
     tempDeletedText = ui.textarea.value;
     ui.textarea.value = '';
     saveContent();
     updateCharCount();
-
-    // 2. Cria/Mostra Toast
     showUndoToast();
 }
 
 function showUndoToast() {
-    // Remove anterior se existir
     ui.toastContainer.innerHTML = '';
-    
     const toast = document.createElement('div');
     toast.className = 'toast';
-    toast.innerHTML = `
-        <span>Texto limpo.</span>
-        <button id="undoBtn" class="btn-undo">Desfazer (Alt+Z)</button>
-    `;
-    
+    toast.innerHTML = `<span>Texto limpo.</span><button id="undoBtn" class="btn-undo">Desfazer (Alt+Z)</button>`;
     ui.toastContainer.appendChild(toast);
 
-    // Lógica do Botão Desfazer
     document.getElementById('undoBtn').addEventListener('click', performUndo);
 
-    // Timer para sumir (5s)
     if (undoTimeout) clearTimeout(undoTimeout);
     undoTimeout = setTimeout(() => {
         toast.style.opacity = '0';
         setTimeout(() => toast.remove(), 300);
-        tempDeletedText = ''; // Limpa memória
+        tempDeletedText = '';
     }, 5000);
 }
 
@@ -345,133 +335,110 @@ function performUndo() {
         ui.textarea.value = tempDeletedText;
         saveContent();
         updateCharCount();
-        ui.toastContainer.innerHTML = ''; // Remove Toast
+        ui.toastContainer.innerHTML = '';
         tempDeletedText = '';
         if (undoTimeout) clearTimeout(undoTimeout);
     }
 }
 
 // ========================================================
-// 6. UTILITÁRIOS & PERSISTÊNCIA
+// 8. REDIMENSIONAMENTO DE JANELA (Widget Mode)
 // ========================================================
+ui.toggleSizeBtn.addEventListener('click', () => {
+    ui.container.classList.toggle('minimized');
+    const isMin = ui.container.classList.contains('minimized');
+    
+    // Troca ícones
+    document.getElementById('iconMinimize').style.display = isMin ? 'none' : 'block';
+    document.getElementById('iconMaximize').style.display = isMin ? 'block' : 'none';
+    
+    // Dimensões Alvo (Normal vs Widget Compacto)
+    const targetWidth = isMin ? 380 : 920; 
+    const targetHeight = isMin ? 120 : 800;
 
+    // Se estiver rodando como popup (janela independente)
+    if (window.outerWidth) {
+        try {
+            const screenLeft = window.screen.availLeft || 0;
+            const screenTop = window.screen.availTop || 0;
+            const screenW = window.screen.availWidth;
+            const screenH = window.screen.availHeight;
+
+            // Calcula posição: Canto Inferior Direito com margem
+            const left = (screenLeft + screenW) - targetWidth - 20;
+            const top = (screenTop + screenH) - targetHeight - 20;
+
+            window.resizeTo(targetWidth, targetHeight);
+            window.moveTo(left, top);
+        } catch (e) {
+            console.warn("Navegador bloqueou resizeTo.", e);
+        }
+    }
+});
+
+// ========================================================
+// 9. AUXILIARES & STARTUP
+// ========================================================
 function updateCharCount() {
-    const count = ui.textarea.value.length;
-    ui.charCount.textContent = `${count} caracteres`;
+    ui.charCount.textContent = `${ui.textarea.value.length} caracteres`;
 }
 
 function saveContent() {
-    localStorage.setItem('dd_autosave', ui.textarea.value);
-    ui.saveStatus.textContent = "Salvo agora";
+    localStorage.setItem(CONFIG.STORAGE_KEYS.TEXT, ui.textarea.value);
+    ui.saveStatus.textContent = "Salvo";
     setTimeout(() => ui.saveStatus.textContent = "Sincronizado", 2000);
 }
 
 function loadContent() {
-    const saved = localStorage.getItem('dd_autosave');
+    const saved = localStorage.getItem(CONFIG.STORAGE_KEYS.TEXT);
     if (saved) {
         ui.textarea.value = saved;
         updateCharCount();
     }
 }
 
-// Toggle Widget Mode (Minimizar/Maximizar)
-ui.toggleSizeBtn.addEventListener('click', () => {
-    ui.container.classList.toggle('minimized');
-    const isMin = ui.container.classList.contains('minimized');
-    
-    document.getElementById('iconMinimize').style.display = isMin ? 'none' : 'block';
-    document.getElementById('iconMaximize').style.display = isMin ? 'block' : 'none';
-    
-    // Resize da janela (se possível/permitido pelo browser)
-    if (window.opener && !window.opener.closed) {
-        // Lógica opcional de resize da janela popup
-    }
-});
-
-// ========================================================
-// 7. MODAIS (Versão, Changelog, Glossário, Ajuda)
-// ========================================================
-
-// --- Modal de Versão / Changelog ---
+// Modais (Versão / Glossário)
 ui.versionBtn.addEventListener('click', () => {
     renderChangelog();
     ui.changelogModal.style.display = 'flex';
 });
-
-ui.closeModalBtn.addEventListener('click', () => {
-    ui.changelogModal.style.display = 'none';
-});
+ui.closeModalBtn.addEventListener('click', () => ui.changelogModal.style.display = 'none');
 
 function renderChangelog() {
     ui.changelogList.innerHTML = changelogData.map(item => `
         <div class="version-item">
-            <div class="version-header">
-                <span class="v-num">v${item.version}</span>
-                <span class="v-date">${item.date}</span>
-            </div>
-            <ul class="v-changes">
-                ${item.changes.map(c => `<li>${c}</li>`).join('')}
-            </ul>
+            <div class="version-header"><span class="v-num">v${item.version}</span><span class="v-date">${item.date}</span></div>
+            <ul class="v-changes">${item.changes.map(c => `<li>${c}</li>`).join('')}</ul>
         </div>
     `).join('');
 }
 
-// --- Modal de Glossário (Lógica de UI) ---
+// Glossário Modal
 if (ui.glossaryBtn && ui.glossaryModal) {
     ui.glossaryBtn.addEventListener('click', () => {
-        Glossary.render();
+        glossaryManager.renderCallback(glossaryManager.getTerms()); // Força render
         ui.glossaryModal.style.display = 'flex';
     });
-    
-    ui.closeGlossaryBtn.addEventListener('click', () => {
-        ui.glossaryModal.style.display = 'none';
-    });
-    
+    ui.closeGlossaryBtn.addEventListener('click', () => ui.glossaryModal.style.display = 'none');
     ui.addTermBtn.addEventListener('click', () => {
-        Glossary.add(ui.termInput.value, ui.replaceInput.value);
+        glossaryManager.add(ui.termInput.value, ui.replaceInput.value);
+        ui.termInput.value = '';
+        ui.replaceInput.value = '';
     });
 }
 
-// Fechar modais ao clicar fora
-window.addEventListener('click', (e) => {
-    if (e.target === ui.changelogModal) ui.changelogModal.style.display = 'none';
-    if (e.target === ui.glossaryModal) ui.glossaryModal.style.display = 'none';
-});
-
-// ========================================================
-// 8. ATALHOS DE TECLADO (v1.0.1)
-// ========================================================
+// Atalhos Globais
 document.addEventListener('keydown', (e) => {
-    // Alt + G: Gravar
-    if (e.altKey && e.code === 'KeyG') {
-        e.preventDefault();
-        ui.micBtn.click();
-    }
-    // Alt + L: Limpar
-    if (e.altKey && e.code === 'KeyL') {
-        e.preventDefault();
-        executeSafely(() => handleClearAction());
-    }
-    // Alt + C: Copiar
-    if (e.altKey && e.code === 'KeyC') {
-        e.preventDefault();
-        ui.btnCopy.click();
-    }
-    // Alt + Z: Undo
-    if (e.altKey && e.code === 'KeyZ') {
-        e.preventDefault();
-        performUndo();
-    }
+    if (!e.altKey) return;
+    if (e.code === 'KeyG') { e.preventDefault(); ui.micBtn.click(); }
+    if (e.code === 'KeyL') { e.preventDefault(); executeSafely(() => handleClearAction()); }
+    if (e.code === 'KeyC') { e.preventDefault(); ui.btnCopy.click(); }
+    if (e.code === 'KeyZ') { e.preventDefault(); performUndo(); }
 });
 
-// ========================================================
-// 9. INICIALIZAÇÃO
-// ========================================================
+// Inicialização
 window.addEventListener('DOMContentLoaded', () => {
     loadContent();
     ui.versionBtn.textContent = `v${currentVersion}`;
-    initDeviceSelector(); // Carrega lista de microfones
-    
-    // Expor SpeechManager globalmente para debug (opcional)
-    window.speechManager = speechManager;
+    initDeviceSelector();
 });
