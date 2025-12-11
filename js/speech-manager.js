@@ -1,486 +1,228 @@
-import { SpeechManager } from './speech-manager.js';
-import { aiService } from './gemini-service.js';
-import { changelogData, currentVersion } from './changelog.js';
-import Glossary from './glossary.js';
-import { CONFIG } from './config.js';
+export class SpeechManager {
+    constructor(visualizerCanvasId, onResultCallback, onStatusChange) {
+        this.isRecording = false;
+        this.recognition = null;
+        this.audioContext = null;
+        this.mediaStream = null;
+        this.analyser = null;
+        this.canvas = document.getElementById(visualizerCanvasId);
+        this.canvasCtx = this.canvas ? this.canvas.getContext('2d') : null; // Proteção caso canvas não exista
+        this.onResult = onResultCallback;
+        this.onStatus = onStatusChange;
+        
+        // ID do dispositivo selecionado (persistência será tratada no main.js)
+        this.selectedDeviceId = 'default';
 
-// ========================================================
-// 1. REFERÊNCIAS DE UI (DOM Elements)
-// ========================================================
-const ui = {
-    // Área Principal
-    textarea: document.getElementById('transcriptionArea'),
-    charCount: document.getElementById('charCount'),
-    saveStatus: document.getElementById('saveStatus'),
-    statusMsg: document.getElementById('statusMsg'),
-    
-    // Controles Principais
-    micBtn: document.getElementById('micBtn'),
-    audioSource: document.getElementById('audioSource'),
-    fileInput: document.getElementById('fileInput'),
-    
-    // Botões de Ação
-    btnUpload: document.querySelector('.btn-upload'),
-    btnAiFix: document.getElementById('aiFixBtn'),
-    btnAiLegal: document.getElementById('aiLegalBtn'),
-    btnCopy: document.getElementById('copyBtn'),
-    btnClear: document.getElementById('clearBtn'),
-    
-    // Modais e Auxiliares
-    toggleSizeBtn: document.getElementById('toggleSizeBtn'),
-    container: document.getElementById('appContainer'),
-    versionBtn: document.getElementById('versionBtn'),
-    helpBtn: document.getElementById('helpBtn'),
-    changelogModal: document.getElementById('changelogModal'),
-    changelogList: document.getElementById('changelogList'),
-    closeModalBtn: document.getElementById('closeModalBtn'),
-    toastContainer: document.getElementById('toastContainer'),
-
-    // Glossário UI
-    glossaryBtn: document.getElementById('glossaryBtn'),
-    glossaryModal: document.getElementById('glossaryModal'),
-    closeGlossaryBtn: document.getElementById('closeGlossaryBtn'),
-    glossaryList: document.getElementById('glossaryList'),
-    termInput: document.getElementById('termInput'),
-    replaceInput: document.getElementById('replaceInput'),
-    addTermBtn: document.getElementById('addTermBtn')
-};
-
-// Variáveis de Estado
-let undoTimeout = null;
-let tempDeletedText = '';
-let wakeLock = null;
-
-// ========================================================
-// 2. MÓDULO GLOSSÁRIO (Instância)
-// ========================================================
-
-// Instancia o Glossário passando a função de renderização como callback
-const glossaryManager = new Glossary((terms) => {
-    if (!ui.glossaryList) return;
-    ui.glossaryList.innerHTML = '';
-    
-    if (terms.length === 0) {
-        ui.glossaryList.innerHTML = '<p style="color:#9ca3af; text-align:center;">Nenhum termo cadastrado.</p>';
-        return;
+        this.initRecognition();
     }
 
-    terms.forEach((term, index) => {
-        const div = document.createElement('div');
-        div.className = 'glossary-item';
-        div.innerHTML = `
-            <span><strong>${term.from}</strong> ➝ ${term.to}</span>
-            <button class="btn-delete-term" data-index="${index}">&times;</button>
-        `;
-        ui.glossaryList.appendChild(div);
-    });
+    initRecognition() {
+        // Verifica suporte
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert("Seu navegador não suporta Web Speech API. Use Chrome ou Edge.");
+            return;
+        }
 
-    // Re-adiciona listeners para os botões de delete
-    document.querySelectorAll('.btn-delete-term').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            glossaryManager.remove(parseInt(e.target.dataset.index));
-        });
-    });
-});
+        this.recognition = new SpeechRecognition();
+        this.recognition.continuous = true;
+        this.recognition.interimResults = true;
+        this.recognition.lang = 'pt-BR';
 
-// ========================================================
-// 3. WAKE LOCK (MODO INSÔNIA)
-// ========================================================
-
-const toggleWakeLock = async (shouldLock) => {
-    if ('wakeLock' in navigator) {
-        try {
-            if (shouldLock && !wakeLock) {
-                wakeLock = await navigator.wakeLock.request('screen');
-                console.log('Wake Lock ativo: Tela não desligará.');
-            } else if (!shouldLock && wakeLock) {
-                await wakeLock.release();
-                wakeLock = null;
-                console.log('Wake Lock liberado.');
+        this.recognition.onstart = () => this.onStatus('recording');
+        
+        this.recognition.onend = () => {
+            // Reinicia automaticamente se ainda deveria estar gravando (loop de segurança para ditado contínuo)
+            if (this.isRecording) {
+                try { 
+                    this.recognition.start(); 
+                } catch(e) {
+                    // Ignora erros de restart rápido
+                }
+            } else {
+                this.onStatus('idle');
+                this.stopAudioVisualization();
             }
-        } catch (err) {
-            console.warn('Wake Lock não disponível ou bloqueado:', err);
+        };
+
+        this.recognition.onresult = (event) => {
+            let interimTranscript = '';
+            let finalTranscript = '';
+
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript;
+                } else {
+                    interimTranscript += event.results[i][0].transcript;
+                }
+            }
+            this.onResult(finalTranscript, interimTranscript);
+        };
+        
+        this.recognition.onerror = (event) => {
+            console.warn("Speech Error:", event.error);
+            // 'no-speech' é comum em silêncio, não paramos a gravação.
+            // 'not-allowed' ou 'service-not-allowed' são erros fatais.
+            if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                this.isRecording = false;
+                this.onStatus('error');
+            }
+        };
+    }
+
+    /**
+     * [NOVO v1.0.3] Escuta mudanças físicas de hardware (plug/unplug)
+     */
+    listenToDeviceChanges(callback) {
+        if (navigator.mediaDevices && navigator.mediaDevices.ondevicechange !== undefined) {
+            navigator.mediaDevices.ondevicechange = async () => {
+                const devices = await this.getAudioDevices();
+                callback(devices);
+            };
         }
     }
-};
 
-// Recupera o Wake Lock se a aba perder e recuperar a visibilidade
-document.addEventListener('visibilitychange', async () => {
-    if (wakeLock !== null && document.visibilityState === 'visible') {
-        wakeLock = await navigator.wakeLock.request('screen');
-    }
-});
+    /**
+     * [ATUALIZADO v1.0.3] Lista dispositivos com lógica anti-fingerprinting.
+     * Se os labels vierem vazios, pede permissão relâmpago para desbloqueá-los.
+     */
+    async getAudioDevices() {
+        try {
+            // 1. Tentativa inicial de listar
+            let devices = await navigator.mediaDevices.enumerateDevices();
+            let audioDevices = devices.filter(d => d.kind === 'audioinput');
 
-// ========================================================
-// 4. FLUXO SEGURO (AUTO-STOP)
-// ========================================================
-
-const executeSafely = async (actionCallback) => {
-    if (speechManager && speechManager.isRecording) {
-        speechManager.stop();
-        toggleWakeLock(false); // Libera a tela
-        
-        // Feedback visual
-        const originalColor = ui.micBtn.style.backgroundColor;
-        ui.micBtn.style.backgroundColor = '#f59e0b';
-        
-        await new Promise(resolve => setTimeout(resolve, 300));
-        
-        ui.micBtn.style.backgroundColor = '';
-    }
-    actionCallback();
-};
-
-// ========================================================
-// 5. GERENCIAMENTO DE ÁUDIO & DISPOSITIVOS
-// ========================================================
-
-const handleTranscriptionResult = (finalText, interimText) => {
-    if (finalText) {
-        // Usa o método da classe importada
-        const processedText = glossaryManager.process(finalText);
-        
-        const start = ui.textarea.selectionStart;
-        const end = ui.textarea.selectionEnd;
-        const text = ui.textarea.value;
-        const before = text.substring(0, start);
-        const after = text.substring(end, text.length);
-        
-        const prefix = (before.length > 0 && !before.endsWith(' ') && !before.endsWith('\n')) ? ' ' : '';
-        
-        ui.textarea.value = before + prefix + processedText + after;
-        
-        const newCursorPos = start + prefix.length + processedText.length;
-        ui.textarea.setSelectionRange(newCursorPos, newCursorPos);
-        
-        saveContent();
-        updateCharCount();
-    }
-};
-
-const updateStatus = (status) => {
-    ui.statusMsg.className = 'status-bar'; 
-    
-    if (status === 'recording') {
-        ui.statusMsg.textContent = "GRAVANDO";
-        ui.statusMsg.classList.add('active', 'status-recording');
-        ui.micBtn.classList.add('recording');
-    } else if (status === 'processing') {
-        ui.statusMsg.textContent = "PROCESSANDO IA...";
-        ui.statusMsg.classList.add('active', 'status-ai');
-    } else if (status === 'error') {
-        ui.statusMsg.textContent = "ERRO / MICROFONE BLOQUEADO";
-        ui.statusMsg.classList.add('active', 'status-error');
-        ui.micBtn.classList.remove('recording');
-        toggleWakeLock(false); // Garante liberação em erro
-    } else {
-        ui.statusMsg.textContent = "";
-        ui.statusMsg.classList.remove('active');
-        ui.micBtn.classList.remove('recording');
-    }
-};
-
-// Instancia o Gerenciador de Áudio
-const speechManager = new SpeechManager('audioVisualizer', handleTranscriptionResult, updateStatus);
-
-// Inicializa o Seletor de Dispositivos (Persistente)
-async function initDeviceSelector() {
-    const populateSelector = (devices) => {
-        ui.audioSource.innerHTML = '';
-        
-        // Opção Default
-        const defaultOpt = document.createElement('option');
-        defaultOpt.value = 'default';
-        defaultOpt.text = 'Padrão do Sistema';
-        ui.audioSource.appendChild(defaultOpt);
-        
-        // Recupera ID salvo
-        const savedId = localStorage.getItem(CONFIG.STORAGE_KEYS.MIC);
-
-        devices.forEach(device => {
-            const option = document.createElement('option');
-            option.value = device.deviceId;
-            // Fallback visual para labels vazios
-            option.text = device.label || `Microfone USB/Interno (${device.deviceId.slice(0,5)}...)`;
+            // 2. Verifica se temos dispositivos mas sem nomes (Bloqueio do Navegador)
+            // Se d.label for string vazia, o usuário ainda não deu permissão nessa sessão.
+            const hasLabels = audioDevices.some(d => d.label !== "");
             
-            if (device.deviceId === savedId) {
-                option.selected = true;
+            if (!hasLabels && audioDevices.length > 0) {
+                try {
+                    // 3. Trigger Relâmpago: Pede permissão apenas para liberar os metadados (labels)
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    
+                    // Fecha imediatamente para não prender o hardware ou acender a luz de gravação por muito tempo
+                    stream.getTracks().forEach(track => track.stop());
+                    
+                    // 4. Lista novamente, agora com permissão concedida e labels visíveis
+                    devices = await navigator.mediaDevices.enumerateDevices();
+                    audioDevices = devices.filter(d => d.kind === 'audioinput');
+                } catch (permErr) {
+                    console.warn("Permissão para listar nomes de dispositivos foi negada.", permErr);
+                    // Retorna a lista sem nomes mesmo, melhor que nada.
+                }
             }
-            ui.audioSource.appendChild(option);
-        });
 
-        // Aplica o ID salvo no speechManager se existir
-        if (savedId) {
-            speechManager.setDeviceId(savedId);
+            return audioDevices;
+
+        } catch (err) {
+            console.error("Erro crítico ao listar dispositivos:", err);
+            return [];
         }
-    };
+    }
 
-    // 1. Carga Inicial
-    const devices = await speechManager.getAudioDevices();
-    populateSelector(devices);
+    setDeviceId(deviceId) {
+        this.selectedDeviceId = deviceId;
+        // Nota: A mudança efetiva ocorre na próxima vez que chamar start()
+    }
 
-    // 2. Listener para mudanças de hardware (Plug & Play)
-    speechManager.listenToDeviceChanges((updatedDevices) => {
-        populateSelector(updatedDevices);
-    });
-
-    // 3. Listener para salvar preferência do usuário
-    ui.audioSource.addEventListener('change', (e) => {
-        const selectedId = e.target.value;
-        speechManager.setDeviceId(selectedId);
-        localStorage.setItem(CONFIG.STORAGE_KEYS.MIC, selectedId);
+    async start() {
+        if (this.isRecording) return;
         
-        // Feedback visual
-        ui.audioSource.style.borderColor = '#4f46e5';
-        setTimeout(() => ui.audioSource.style.borderColor = '', 300);
-    });
-}
-
-// ========================================================
-// 6. EVENT LISTENERS & AÇÕES
-// ========================================================
-
-// Botão Gravar (Toggle + Wake Lock)
-ui.micBtn.addEventListener('click', () => {
-    if (speechManager.isRecording) {
-        speechManager.stop();
-        toggleWakeLock(false);
-    } else {
-        speechManager.start();
-        toggleWakeLock(true);
-    }
-});
-
-// Botão Upload (Aviso)
-ui.fileInput.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (file) {
-        executeSafely(() => {
-            alert("Upload de áudio para transcrição offline requer processamento server-side pesado.\n\nNa versão Client-Side, suportamos apenas leitura de arquivos .txt para edição.");
-        });
-    }
-});
-
-// Botão Corrigir Gramática (AI)
-ui.btnAiFix.addEventListener('click', () => {
-    const text = ui.textarea.value.trim();
-    if (!text) return alert("Digite ou dite algo primeiro.");
-
-    executeSafely(async () => {
-        updateStatus('processing');
         try {
-            const result = await aiService.fixGrammar(text);
-            ui.textarea.value = result;
-            saveContent();
-            updateStatus('success'); 
-        } catch (error) {
-            alert("Erro na IA: " + error.message);
-            updateStatus('error');
-        } finally {
-            setTimeout(() => updateStatus('idle'), 2000);
+            // 1. Inicia o fluxo de áudio para Visualização (Canvas)
+            // O AudioContext respeita rigorosamente o deviceId
+            const constraints = {
+                audio: {
+                    deviceId: this.selectedDeviceId && this.selectedDeviceId !== 'default' 
+                        ? { exact: this.selectedDeviceId } 
+                        : undefined,
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }
+            };
+            
+            this.mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+            this.startAudioVisualization(this.mediaStream);
+
+            // 2. Inicia o reconhecimento de texto
+            // Nota: Web Speech API às vezes ignora deviceId e usa o padrão do SO,
+            // mas forçamos o getUserMedia antes para garantir permissões e sinal.
+            this.isRecording = true;
+            this.recognition.start();
+
+        } catch (err) {
+            console.error("Erro ao iniciar áudio:", err);
+            this.onStatus('error');
+            alert("Erro ao acessar microfone. Verifique se o dispositivo está conectado e permitido.");
         }
-    });
-});
+    }
 
-// Botão Jurídico (AI)
-ui.btnAiLegal.addEventListener('click', () => {
-    const text = ui.textarea.value.trim();
-    if (!text) return alert("Digite ou dite algo primeiro.");
-
-    executeSafely(async () => {
-        updateStatus('processing');
-        try {
-            const result = await aiService.convertToLegal(text);
-            ui.textarea.value = result;
-            saveContent();
-            updateStatus('success');
-        } catch (error) {
-            alert("Erro na IA: " + error.message);
-            updateStatus('error');
-        } finally {
-            setTimeout(() => updateStatus('idle'), 2000);
+    stop() {
+        this.isRecording = false;
+        if (this.recognition) {
+            try { this.recognition.stop(); } catch(e) {}
         }
-    });
-});
+        this.stopAudioVisualization();
+    }
 
-// Botão Copiar
-ui.btnCopy.addEventListener('click', () => {
-    executeSafely(() => {
-        ui.textarea.select();
-        document.execCommand('copy'); 
-        navigator.clipboard.writeText(ui.textarea.value);
+    // --- Lógica do Visualizador (Osciloscópio) ---
+    startAudioVisualization(stream) {
+        if (!this.canvasCtx) return; // Se canvas não existir, aborta visualização
+
+        if (!this.audioContext) {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        } else if (this.audioContext.state === 'suspended') {
+            this.audioContext.resume();
+        }
         
-        const originalText = ui.btnCopy.querySelector('span').textContent;
-        ui.btnCopy.querySelector('span').textContent = "Copiado!";
-        ui.btnCopy.classList.add('status-success');
-        
-        setTimeout(() => {
-            ui.btnCopy.querySelector('span').textContent = originalText;
-            ui.btnCopy.classList.remove('status-success');
-        }, 2000);
-    });
-});
+        const source = this.audioContext.createMediaStreamSource(stream);
+        this.analyser = this.audioContext.createAnalyser();
+        this.analyser.fftSize = 2048;
+        source.connect(this.analyser);
 
-// Botão Limpar com Undo (Toast)
-ui.btnClear.addEventListener('click', () => {
-    executeSafely(() => handleClearAction());
-});
+        const bufferLength = this.analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
 
-function handleClearAction() {
-    if (!ui.textarea.value) return;
+        const draw = () => {
+            if (!this.isRecording) return;
+            requestAnimationFrame(draw);
 
-    tempDeletedText = ui.textarea.value;
-    ui.textarea.value = '';
-    saveContent();
-    updateCharCount();
+            this.analyser.getByteTimeDomainData(dataArray);
 
-    showUndoToast();
-}
+            this.canvasCtx.fillStyle = '#f9fafb'; // Limpa com a cor de fundo (igual ao CSS)
+            this.canvasCtx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-function showUndoToast() {
-    ui.toastContainer.innerHTML = '';
-    
-    const toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.innerHTML = `
-        <span>Texto limpo.</span>
-        <button id="undoBtn" class="btn-undo">Desfazer (Alt+Z)</button>
-    `;
-    
-    ui.toastContainer.appendChild(toast);
+            this.canvasCtx.lineWidth = 2;
+            this.canvasCtx.strokeStyle = '#4f46e5'; // Cor da onda (Indigo)
+            this.canvasCtx.beginPath();
 
-    document.getElementById('undoBtn').addEventListener('click', performUndo);
+            const sliceWidth = this.canvas.width * 1.0 / bufferLength;
+            let x = 0;
 
-    if (undoTimeout) clearTimeout(undoTimeout);
-    undoTimeout = setTimeout(() => {
-        toast.style.opacity = '0';
-        setTimeout(() => toast.remove(), 300);
-        tempDeletedText = ''; 
-    }, 5000);
-}
+            for (let i = 0; i < bufferLength; i++) {
+                const v = dataArray[i] / 128.0;
+                const y = v * this.canvas.height / 2;
 
-function performUndo() {
-    if (tempDeletedText) {
-        ui.textarea.value = tempDeletedText;
-        saveContent();
-        updateCharCount();
-        ui.toastContainer.innerHTML = ''; 
-        tempDeletedText = '';
-        if (undoTimeout) clearTimeout(undoTimeout);
+                if (i === 0) this.canvasCtx.moveTo(x, y);
+                else this.canvasCtx.lineTo(x, y);
+
+                x += sliceWidth;
+            }
+
+            this.canvasCtx.lineTo(this.canvas.width, this.canvas.height / 2);
+            this.canvasCtx.stroke();
+        };
+
+        draw();
+    }
+
+    stopAudioVisualization() {
+        if (this.mediaStream) {
+            this.mediaStream.getTracks().forEach(track => track.stop());
+            this.mediaStream = null;
+        }
+        // Não fechamos o audioContext aqui para permitir reuso rápido
     }
 }
-
-// ========================================================
-// 7. UTILITÁRIOS & PERSISTÊNCIA
-// ========================================================
-
-function updateCharCount() {
-    const count = ui.textarea.value.length;
-    ui.charCount.textContent = `${count} caracteres`;
-}
-
-function saveContent() {
-    localStorage.setItem(CONFIG.STORAGE_KEYS.TEXT, ui.textarea.value);
-    ui.saveStatus.textContent = "Salvo agora";
-    setTimeout(() => ui.saveStatus.textContent = "Sincronizado", 2000);
-}
-
-function loadContent() {
-    const saved = localStorage.getItem(CONFIG.STORAGE_KEYS.TEXT);
-    if (saved) {
-        ui.textarea.value = saved;
-        updateCharCount();
-    }
-}
-
-ui.toggleSizeBtn.addEventListener('click', () => {
-    ui.container.classList.toggle('minimized');
-    const isMin = ui.container.classList.contains('minimized');
-    
-    document.getElementById('iconMinimize').style.display = isMin ? 'none' : 'block';
-    document.getElementById('iconMaximize').style.display = isMin ? 'block' : 'none';
-});
-
-// ========================================================
-// 8. MODAIS
-// ========================================================
-
-ui.versionBtn.addEventListener('click', () => {
-    renderChangelog();
-    ui.changelogModal.style.display = 'flex';
-});
-
-ui.closeModalBtn.addEventListener('click', () => {
-    ui.changelogModal.style.display = 'none';
-});
-
-function renderChangelog() {
-    ui.changelogList.innerHTML = changelogData.map(item => `
-        <div class="version-item">
-            <div class="version-header">
-                <span class="v-num">v${item.version}</span>
-                <span class="v-date">${item.date}</span>
-            </div>
-            <ul class="v-changes">
-                ${item.changes.map(c => `<li>${c}</li>`).join('')}
-            </ul>
-        </div>
-    `).join('');
-}
-
-// Lógica de Glossário (Listeners)
-if (ui.glossaryBtn && ui.glossaryModal) {
-    ui.glossaryBtn.addEventListener('click', () => {
-        // Renderiza com os termos atuais do manager
-        glossaryManager.renderCallback(glossaryManager.getTerms());
-        ui.glossaryModal.style.display = 'flex';
-    });
-    
-    ui.closeGlossaryBtn.addEventListener('click', () => {
-        ui.glossaryModal.style.display = 'none';
-    });
-    
-    ui.addTermBtn.addEventListener('click', () => {
-        glossaryManager.add(ui.termInput.value, ui.replaceInput.value);
-        ui.termInput.value = '';
-        ui.replaceInput.value = '';
-    });
-}
-
-window.addEventListener('click', (e) => {
-    if (e.target === ui.changelogModal) ui.changelogModal.style.display = 'none';
-    if (e.target === ui.glossaryModal) ui.glossaryModal.style.display = 'none';
-});
-
-// ========================================================
-// 9. ATALHOS DE TECLADO
-// ========================================================
-document.addEventListener('keydown', (e) => {
-    if (e.altKey && e.code === 'KeyG') {
-        e.preventDefault();
-        ui.micBtn.click();
-    }
-    if (e.altKey && e.code === 'KeyL') {
-        e.preventDefault();
-        executeSafely(() => handleClearAction());
-    }
-    if (e.altKey && e.code === 'KeyC') {
-        e.preventDefault();
-        ui.btnCopy.click();
-    }
-    if (e.altKey && e.code === 'KeyZ') {
-        e.preventDefault();
-        performUndo();
-    }
-});
-
-// ========================================================
-// 10. INICIALIZAÇÃO
-// ========================================================
-window.addEventListener('DOMContentLoaded', () => {
-    loadContent();
-    ui.versionBtn.textContent = `v${currentVersion}`;
-    initDeviceSelector();
-    
-    window.speechManager = speechManager;
-});
