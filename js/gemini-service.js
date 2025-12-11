@@ -1,5 +1,3 @@
---- START OF FILE js/gemini-service.js ---
-
 /**
  * Serviço de Integração com Google Gemini (AI)
  * Responsável pela comunicação com a API para correção e formatação.
@@ -73,4 +71,3 @@ export const aiService = {
         return await this.generateText(prompt);
     }
 };
---- END OF FILE js/gemini-service.js ---
