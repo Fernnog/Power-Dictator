@@ -62,6 +62,9 @@ export class SpeechManager {
         
         this.recognition.onerror = (event) => {
             console.warn("Speech Error:", event.error);
+            // Ignora erro de 'no-speech' para manter a gravação ativa em silêncio
+            if (event.error === 'no-speech') return;
+
             if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
                 this.isRecording = false;
                 this.onStatus('error');
@@ -123,8 +126,8 @@ export class SpeechManager {
         if (this.isRecording) return;
         
         try {
-            // Garante que o AudioContext exista e esteja rodando (resume)
-            // Navegadores suspendem contextos criados sem interação do usuário.
+            // 1. Inicia visualizador IMEDIATAMENTE.
+            // Isso garante que o AudioContext seja criado/resumido dentro do gesto do usuário (clique).
             if (!this.audioContext) {
                 this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
             }
@@ -132,7 +135,7 @@ export class SpeechManager {
                 await this.audioContext.resume();
             }
 
-            // 1. Configura Stream de Áudio
+            // 2. Configura Stream de Áudio
             const constraints = {
                 audio: {
                     deviceId: this.selectedDeviceId && this.selectedDeviceId !== 'default' 
@@ -146,10 +149,10 @@ export class SpeechManager {
             
             this.mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
             
-            // Inicia visualizador IMEDIATAMENTE após obter o stream
+            // Conecta o stream ao visualizador
             this.startAudioVisualization(this.mediaStream);
 
-            // 2. Inicia reconhecimento de voz
+            // 3. Inicia reconhecimento de voz
             this.isRecording = true;
             this.recognition.start();
 
@@ -168,53 +171,60 @@ export class SpeechManager {
         this.stopAudioVisualization();
     }
 
-    // --- Lógica do Visualizador (Osciloscópio Otimizado v1.0.4) ---
-    startAudioVisualization(stream) {
+    // --- Lógica do Visualizador (Osciloscópio OTIMIZADO v1.0.4) ---
+    async startAudioVisualization(stream) {
         if (!this.canvasCtx) return;
 
-        // Garante conexão
+        // Garante robustez do AudioContext
         if (!this.audioContext) {
              this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
         }
+        if (this.audioContext.state === 'suspended') {
+            await this.audioContext.resume();
+        }
 
+        // Configuração do Analisador
         const source = this.audioContext.createMediaStreamSource(stream);
         this.analyser = this.audioContext.createAnalyser();
-        this.analyser.fftSize = 2048;
+        this.analyser.fftSize = 2048; 
         source.connect(this.analyser);
 
         const bufferLength = this.analyser.frequencyBinCount;
         const dataArray = new Uint8Array(bufferLength);
-        
-        // Variáveis de estado para OTIMIZAÇÃO DE PERFORMANCE (evitar Layout Thrashing)
+
+        // Variáveis para otimização de renderização (evitar Layout Thrashing)
         let isSignalStrong = false;
-        const feedbackTarget = document.querySelector('.editor-area'); // Alvo do feedback no modo Widget
-        const canvasTarget = this.canvas; // Alvo do feedback no modo Normal
+        // Tenta pegar a área de texto para feedback no modo widget, caso exista
+        const feedbackTarget = document.querySelector('.editor-area'); 
+        const canvasTarget = this.canvas;
 
         const draw = () => {
-            // Se parou de gravar, interrompe o loop
+            // Se parou de gravar, encerra o loop de animação
             if (!this.isRecording) return;
             
             requestAnimationFrame(draw);
 
             this.analyser.getByteTimeDomainData(dataArray);
 
-            // Limpa o Canvas
-            this.canvasCtx.fillStyle = '#f9fafb';
+            // Limpa Canvas
+            this.canvasCtx.fillStyle = '#f9fafb'; // Cor de fundo do app
             this.canvasCtx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-            // Define geometria
             const centerY = this.canvas.height / 2;
-            const threshold = this.canvas.height * 0.15; // 15% de sensibilidade (Line of Confidence)
+            // Define limite de "sinal útil" (15% da altura)
+            const threshold = this.canvas.height * 0.15; 
 
             // 1. Desenha Linha de Threshold (Pontilhada Vermelha)
             this.canvasCtx.beginPath();
-            this.canvasCtx.setLineDash([4, 4]); // Padrão pontilhado
-            this.canvasCtx.strokeStyle = 'rgba(239, 68, 68, 0.3)'; // Vermelho pálido
+            this.canvasCtx.setLineDash([4, 4]); // Padrão tracejado
+            this.canvasCtx.strokeStyle = 'rgba(239, 68, 68, 0.3)'; // Vermelho suave
             this.canvasCtx.lineWidth = 1;
             
-            // Linha superior e inferior
+            // Linha Superior
             this.canvasCtx.moveTo(0, centerY - threshold);
             this.canvasCtx.lineTo(this.canvas.width, centerY - threshold);
+            
+            // Linha Inferior
             this.canvasCtx.moveTo(0, centerY + threshold);
             this.canvasCtx.lineTo(this.canvas.width, centerY + threshold);
             this.canvasCtx.stroke();
@@ -222,18 +232,18 @@ export class SpeechManager {
             // 2. Desenha Onda de Áudio
             this.canvasCtx.setLineDash([]); // Restaura linha sólida
             this.canvasCtx.lineWidth = 2;
-            this.canvasCtx.strokeStyle = '#4f46e5'; 
+            this.canvasCtx.strokeStyle = '#4f46e5'; // Cor Indigo
             this.canvasCtx.beginPath();
 
             const sliceWidth = this.canvas.width * 1.0 / bufferLength;
             let x = 0;
-            let maxAmplitude = 0; // Para detecção de força do sinal
+            let maxAmplitude = 0; // Para calcular força do sinal
 
             for (let i = 0; i < bufferLength; i++) {
-                const v = dataArray[i] / 128.0;
+                const v = dataArray[i] / 128.0; // Normaliza byte (0..255) para float
                 const y = v * centerY;
                 
-                // Calcula amplitude atual (distância do centro)
+                // Calcula o pico de volume atual
                 const amplitude = Math.abs(y - centerY);
                 if (amplitude > maxAmplitude) maxAmplitude = amplitude;
 
@@ -247,20 +257,21 @@ export class SpeechManager {
             this.canvasCtx.stroke();
             
             // 3. Feedback Visual OTIMIZADO
-            // Só toca no DOM (classList) se o estado mudar, não a cada frame.
+            // Verifica se o sinal ultrapassou o threshold (alguém está falando)
             const currentSignalStrong = maxAmplitude > threshold;
             
+            // Só altera classes CSS se o estado mudou (Performance Saver)
             if (currentSignalStrong !== isSignalStrong) {
                 isSignalStrong = currentSignalStrong;
                 
                 if (isSignalStrong) {
-                    // Aplica feedback (borda verde)
+                    // Adiciona brilho verde
                     canvasTarget.classList.add('audio-detected');
-                    if(feedbackTarget) feedbackTarget.classList.add('audio-detected');
+                    if (feedbackTarget) feedbackTarget.classList.add('audio-detected');
                 } else {
-                    // Remove feedback
+                    // Remove brilho
                     canvasTarget.classList.remove('audio-detected');
-                    if(feedbackTarget) feedbackTarget.classList.remove('audio-detected');
+                    if (feedbackTarget) feedbackTarget.classList.remove('audio-detected');
                 }
             }
         };
@@ -274,11 +285,11 @@ export class SpeechManager {
             this.mediaStream = null;
         }
         
-        // Remove feedback visual residual ao parar
+        // Remove feedback visual ao parar
         if (this.canvas) this.canvas.classList.remove('audio-detected');
         const feedbackTarget = document.querySelector('.editor-area');
         if (feedbackTarget) feedbackTarget.classList.remove('audio-detected');
-        
-        // Nota: Não fechamos o audioContext para permitir reuso rápido no .resume()
+
+        // Nota: Não fechamos o audioContext para permitir reuso rápido
     }
 }
