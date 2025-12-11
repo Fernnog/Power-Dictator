@@ -1,5 +1,3 @@
---- START OF FILE js/changelog.js ---
-
 /**
  * Constante de Versão Atual
  * Usada para exibir no badge do Header (app.html)
@@ -43,4 +41,3 @@ export const changelogData = [
         ]
     }
 ];
---- END OF FILE js/changelog.js ---
