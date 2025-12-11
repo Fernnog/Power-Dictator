@@ -1,25 +1,46 @@
+--- START OF FILE js/changelog.js ---
+
+/**
+ * Constante de Versão Atual
+ * Usada para exibir no badge do Header (app.html)
+ */
+export const currentVersion = "1.0.2";
+
+/**
+ * Histórico de Versões
+ * Array de objetos contendo versão, data e lista de mudanças.
+ * A ordem deve ser decrescente (mais recente primeiro).
+ */
 export const changelogData = [
     {
-        version: "1.0.1",
-        date: new Date().toLocaleDateString('pt-BR'), // Pega a data de hoje automaticamente
+        version: "1.0.2",
+        date: "26/10/2023",
         changes: [
-            "⚡ Speed & Safety Update: Foco total em produtividade 'Mouse-Free'.",
-            "Navegação via Teclado: Novos atalhos estratégicos (Alt+G, Alt+L, Alt+C).",
-            "🛡️ Rede de Segurança: Sistema de 'Undo' (Desfazer) para limpezas acidentais.",
-            "📘 Central de Ajuda: Novo guia visual de atalhos e dicas integrado (Botão '?').",
-            "Arquitetura: Refatoração modular com introdução do config.js e hotkeys.js."
+            "✨ <strong>Glossário Pessoal:</strong> Ensine o sistema! Substituição automática de termos (ex: 'artigo quinto' → 'Art. 5º').",
+            "🛡️ <strong>Fluxo Seguro (Auto-Stop):</strong> O microfone desliga automaticamente ao acionar Copiar, Limpar ou Ferramentas de IA, prevenindo erros de sobreposição.",
+            "🎧 <strong>Supressão de Ruído Nativa:</strong> Ativação forçada dos filtros de hardware do navegador para isolar a voz (Noise Suppression & Echo Cancellation).",
+            "⚙️ <strong>Nova Interface:</strong> Modal dedicado para gerenciamento de termos do dicionário pessoal."
+        ]
+    },
+    {
+        version: "1.0.1",
+        date: "24/10/2023",
+        changes: [
+            "🚀 <strong>Produtividade Mouse-Free:</strong> Novos atalhos de teclado (Alt+G para Gravar, Alt+C para Copiar, Alt+L para Limpar).",
+            "↩️ <strong>Rede de Segurança (Undo):</strong> Apagou sem querer? Agora você tem 5 segundos para desfazer a limpeza da tela.",
+            "❓ <strong>Central de Ajuda:</strong> Novo botão (?) com mapa visual de atalhos e dicas de uso.",
+            "🔧 <strong>Refatoração:</strong> Melhoria na estabilidade de eventos de teclado."
         ]
     },
     {
         version: "1.0.0",
-        date: "24/05/2024", // Data histórica do lançamento da v1.0
+        date: "20/10/2023",
         changes: [
-            "Lançamento Oficial da Versão 1.0.",
-            "Motor de Áudio DSP: Filtros de ruído e compressor dinâmico.",
-            "Smart Docking: Modo Widget flutuante no canto da tela.",
-            "Integração IA: Correção gramatical e modo 'Jurídico' via Gemini.",
-            "UX Otimizada: Monitor de sinal fraco e remoção de travas de segurança.",
-            "Persistência: Salva preferências de microfone automaticamente."
+            "🎉 <strong>Lançamento Inicial:</strong> Versão estável do Ditado Digital Pro.",
+            "🧠 <strong>Integração IA:</strong> Conexão com Google Gemini para correção gramatical e conversão jurídica.",
+            "📊 <strong>Visualizador de Áudio:</strong> Osciloscópio em tempo real para feedback visual da voz.",
+            "💾 <strong>Auto-Save:</strong> Persistência local de dados para evitar perda de trabalho."
         ]
     }
 ];
+--- END OF FILE js/changelog.js ---
