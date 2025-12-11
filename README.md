@@ -1,4 +1,4 @@
-# Ditado Digital Pro v1.0.1 🎙️
+# Ditado Digital Pro 🎙️
 > **Engenharia de Áudio DSP + Inteligência Artificial + Fluxo "Mouse-Free".**
 > *A ferramenta definitiva para transcrição de alta performance com Zero Latência.*
 
