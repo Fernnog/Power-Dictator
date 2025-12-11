@@ -123,7 +123,6 @@ export class SpeechManager {
         if (this.isRecording) return;
         
         try {
-            // [CORREÇÃO VISUALIZADOR] 
             // Garante que o AudioContext exista e esteja rodando (resume)
             // Navegadores suspendem contextos criados sem interação do usuário.
             if (!this.audioContext) {
@@ -169,7 +168,7 @@ export class SpeechManager {
         this.stopAudioVisualization();
     }
 
-    // --- Lógica do Visualizador (Osciloscópio) ---
+    // --- Lógica do Visualizador (Osciloscópio Otimizado v1.0.4) ---
     startAudioVisualization(stream) {
         if (!this.canvasCtx) return;
 
@@ -185,28 +184,58 @@ export class SpeechManager {
 
         const bufferLength = this.analyser.frequencyBinCount;
         const dataArray = new Uint8Array(bufferLength);
+        
+        // Variáveis de estado para OTIMIZAÇÃO DE PERFORMANCE (evitar Layout Thrashing)
+        let isSignalStrong = false;
+        const feedbackTarget = document.querySelector('.editor-area'); // Alvo do feedback no modo Widget
+        const canvasTarget = this.canvas; // Alvo do feedback no modo Normal
 
         const draw = () => {
-            // Se parou de gravar, para o loop de desenho
+            // Se parou de gravar, interrompe o loop
             if (!this.isRecording) return;
             
             requestAnimationFrame(draw);
 
             this.analyser.getByteTimeDomainData(dataArray);
 
-            this.canvasCtx.fillStyle = '#f9fafb'; // Limpa fundo
+            // Limpa o Canvas
+            this.canvasCtx.fillStyle = '#f9fafb';
             this.canvasCtx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
+            // Define geometria
+            const centerY = this.canvas.height / 2;
+            const threshold = this.canvas.height * 0.15; // 15% de sensibilidade (Line of Confidence)
+
+            // 1. Desenha Linha de Threshold (Pontilhada Vermelha)
+            this.canvasCtx.beginPath();
+            this.canvasCtx.setLineDash([4, 4]); // Padrão pontilhado
+            this.canvasCtx.strokeStyle = 'rgba(239, 68, 68, 0.3)'; // Vermelho pálido
+            this.canvasCtx.lineWidth = 1;
+            
+            // Linha superior e inferior
+            this.canvasCtx.moveTo(0, centerY - threshold);
+            this.canvasCtx.lineTo(this.canvas.width, centerY - threshold);
+            this.canvasCtx.moveTo(0, centerY + threshold);
+            this.canvasCtx.lineTo(this.canvas.width, centerY + threshold);
+            this.canvasCtx.stroke();
+
+            // 2. Desenha Onda de Áudio
+            this.canvasCtx.setLineDash([]); // Restaura linha sólida
             this.canvasCtx.lineWidth = 2;
-            this.canvasCtx.strokeStyle = '#4f46e5'; // Cor da onda
+            this.canvasCtx.strokeStyle = '#4f46e5'; 
             this.canvasCtx.beginPath();
 
             const sliceWidth = this.canvas.width * 1.0 / bufferLength;
             let x = 0;
+            let maxAmplitude = 0; // Para detecção de força do sinal
 
             for (let i = 0; i < bufferLength; i++) {
                 const v = dataArray[i] / 128.0;
-                const y = v * this.canvas.height / 2;
+                const y = v * centerY;
+                
+                // Calcula amplitude atual (distância do centro)
+                const amplitude = Math.abs(y - centerY);
+                if (amplitude > maxAmplitude) maxAmplitude = amplitude;
 
                 if (i === 0) this.canvasCtx.moveTo(x, y);
                 else this.canvasCtx.lineTo(x, y);
@@ -214,8 +243,26 @@ export class SpeechManager {
                 x += sliceWidth;
             }
 
-            this.canvasCtx.lineTo(this.canvas.width, this.canvas.height / 2);
+            this.canvasCtx.lineTo(this.canvas.width, centerY);
             this.canvasCtx.stroke();
+            
+            // 3. Feedback Visual OTIMIZADO
+            // Só toca no DOM (classList) se o estado mudar, não a cada frame.
+            const currentSignalStrong = maxAmplitude > threshold;
+            
+            if (currentSignalStrong !== isSignalStrong) {
+                isSignalStrong = currentSignalStrong;
+                
+                if (isSignalStrong) {
+                    // Aplica feedback (borda verde)
+                    canvasTarget.classList.add('audio-detected');
+                    if(feedbackTarget) feedbackTarget.classList.add('audio-detected');
+                } else {
+                    // Remove feedback
+                    canvasTarget.classList.remove('audio-detected');
+                    if(feedbackTarget) feedbackTarget.classList.remove('audio-detected');
+                }
+            }
         };
 
         draw();
@@ -226,6 +273,12 @@ export class SpeechManager {
             this.mediaStream.getTracks().forEach(track => track.stop());
             this.mediaStream = null;
         }
+        
+        // Remove feedback visual residual ao parar
+        if (this.canvas) this.canvas.classList.remove('audio-detected');
+        const feedbackTarget = document.querySelector('.editor-area');
+        if (feedbackTarget) feedbackTarget.classList.remove('audio-detected');
+        
         // Nota: Não fechamos o audioContext para permitir reuso rápido no .resume()
     }
 }
