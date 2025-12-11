@@ -55,11 +55,18 @@ body {
 }
 
 /* --- MODO MINIMIZADO (WIDGET COMPACTO) --- */
+/* Transforma a janela em uma barra horizontal flutuante */
 .container.minimized {
-    padding: 10px;
-    height: 100vh; /* Ocupa toda a altura da janela popup reduzida */
+    padding: 0 10px;
+    height: 100vh; /* Ocupa 100% da janela reduzida */
+    width: 100vw;
     border-radius: 0;
-    background: rgba(255, 255, 255, 0.98);
+    background: #ffffff;
+    display: flex;
+    flex-direction: row; /* Fluxo horizontal */
+    align-items: center;
+    justify-content: flex-start;
+    overflow: hidden;
 }
 
 /* Esconde elementos desnecessários no modo widget */
@@ -73,14 +80,27 @@ body {
 .container.minimized .btn-copy,
 .container.minimized .status-bar,
 .container.minimized .device-selector-container,
-.container.minimized .header-actions { /* Esconde botões de topo no modo mini */
+.container.minimized .header-actions,
+.container.minimized .editor-area { 
     display: none !important;
 }
 
 .container.minimized .app-header {
-    margin-bottom: 0;
+    margin: 0;
+    width: 0;
     height: 0;
-    overflow: visible;
+    overflow: visible; /* Necessário para o botão de toggle ser clicável */
+}
+
+/* Reposiciona o botão de maximizar */
+.container.minimized .btn-toggle-size {
+    position: fixed;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%) scale(0.9);
+    background: #f3f4f6;
+    z-index: 50;
+    padding: 6px;
 }
 
 /* =============================================== */
@@ -247,23 +267,6 @@ textarea {
     background: #fff;
 }
 
-/* Ajustes Específicos do Editor no Modo Compacto */
-.container.minimized .editor-area {
-    margin-top: 2rem; /* Espaço para o botão de toggle */
-    margin-bottom: 0.5rem;
-    border-radius: 12px;
-    background: transparent;
-    border: none;
-    box-shadow: none;
-}
-
-.container.minimized textarea {
-    padding: 0.5rem;
-    font-size: 1.1rem;
-    background: #f9fafb;
-    border-radius: 8px;
-}
-
 /* =============================================== */
 /* 5. STATUS PILL                                  */
 /* =============================================== */
@@ -354,7 +357,6 @@ textarea {
     border: 1px solid #f87171;
 }
 
-/* Status Aviso de Sinal Fraco */
 .status-bar.status-warning {
     background-color: #fef3c7; 
     color: #d97706; 
@@ -384,6 +386,16 @@ textarea {
     gap: 10px;
     padding: 0.5rem;
     transition: all 0.3s ease;
+}
+
+/* --- Ajustes DOCK no Modo Compacto --- */
+.container.minimized .control-dock {
+    width: 100%;
+    padding: 0 40px 0 0; /* Espaço para botão de toggle na direita */
+    justify-content: flex-start;
+    gap: 12px;
+    border: none;
+    background: transparent;
 }
 
 /* Estilo do Container do Seletor */
@@ -455,34 +467,27 @@ textarea {
     box-shadow: inset 0 0 10px rgba(0,0,0,0.2);
 }
 
-/* --- Ajustes DOCK no Modo Compacto --- */
-.container.minimized .control-dock {
-    justify-content: space-around;
-    gap: 6px;
-    padding: 0 0 5px 0;
-    flex-wrap: nowrap;
-}
-
+/* Overrides para Botões no Modo Compacto */
 .container.minimized .btn-action {
     flex: 0 0 auto; 
-    width: 42px;
-    height: 42px;
+    width: 40px;
+    height: 40px;
     padding: 0;
     border-radius: 50%;
     box-shadow: none;
 }
 
 .container.minimized .btn-mic {
-    width: 56px;
-    height: 56px;
-    order: 2; /* Centro */
-    margin: 0 8px;
+    width: 48px; /* Botão principal levemente maior */
+    height: 48px;
+    order: -1; /* Microfone primeiro */
+    margin-right: 10px;
     box-shadow: 0 4px 10px rgba(79, 70, 229, 0.25);
 }
 
-/* Exibe apenas estes botões no modo mini */
-.container.minimized .btn-magic { order: 1; display: flex !important; background-color: #f59e0b; }
-.container.minimized .btn-clear { order: 3; display: flex !important; border: none; background: #fee2e2; color: #ef4444; }
+/* Garante visibilidade dos botões essenciais no mini */
+.container.minimized .btn-magic { display: flex !important; background-color: #f59e0b; order: 2; }
+.container.minimized .btn-clear { display: flex !important; border: none; background: #fee2e2; color: #ef4444; order: 3; }
 
 .container.minimized .btn-action span { display: none; }
 
@@ -608,13 +613,11 @@ textarea {
     to { transform: translateY(0); opacity: 1; }
 }
 
-/* --- ESTILOS DE AJUDA & TECLAS (v1.0.1) --- */
-
-/* Estilização de "Teclas" (KBD tag) */
+/* --- ESTILOS DE AJUDA & TECLAS --- */
 kbd {
     background-color: #f3f4f6;
     border: 1px solid #d1d5db;
-    border-bottom-width: 3px; /* Efeito 3D */
+    border-bottom-width: 3px;
     border-radius: 6px;
     padding: 2px 6px;
     font-family: 'Inter', monospace;
@@ -627,7 +630,6 @@ kbd {
     margin: 0 2px;
 }
 
-/* Tabela de Ajuda dentro do Modal */
 .help-table {
     width: 100%;
     border-collapse: collapse;
@@ -649,8 +651,7 @@ kbd {
     color: var(--text-main);
 }
 
-/* --- ESTILOS DE GLOSSÁRIO (v1.0.2) --- */
-
+/* --- ESTILOS DE GLOSSÁRIO --- */
 .glossary-form {
     display: flex;
     gap: 10px;
@@ -688,15 +689,6 @@ kbd {
     background: #f3f4f6;
 }
 
-.term-pair {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-.term-from { font-weight: 500; color: var(--text-main); }
-.term-arrow { color: var(--text-muted); font-size: 0.8rem; }
-.term-to { font-weight: 600; color: var(--c-mic); }
-
 .btn-delete-term {
     color: var(--text-muted);
     background: none;
@@ -720,7 +712,7 @@ kbd {
     left: 50%;
     transform: translateX(-50%);
     z-index: 1000;
-    pointer-events: none; /* Permite clicar através do container vazio */
+    pointer-events: none;
 }
 
 .toast {
