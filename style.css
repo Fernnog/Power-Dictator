@@ -54,34 +54,62 @@ body {
     position: relative;
 }
 
-/* --- MODO MINIMIZADO (WIDGET COMPACTO) --- */
-/* Transforma a janela em uma barra horizontal flutuante */
+/* --- MODO MINIMIZADO (WIDGET VERTICAL - v1.0.4) --- */
+/* Transforma a janela em um bloco de notas vertical flutuante */
 .container.minimized {
-    padding: 0 10px;
-    height: 100vh; /* Ocupa 100% da janela reduzida */
+    padding: 0;
+    height: 100vh; 
     width: 100vw;
     border-radius: 0;
     background: #ffffff;
     display: flex;
-    flex-direction: row; /* Fluxo horizontal */
-    align-items: center;
-    justify-content: flex-start;
+    flex-direction: column; /* Fluxo Vertical */
+    justify-content: flex-end; /* Conteúdo no topo, dock embaixo */
     overflow: hidden;
 }
 
-/* Esconde elementos desnecessários no modo widget */
+/* REEXIBE a área de texto, ajustada para leitura rápida */
+.container.minimized .editor-area {
+    display: flex !important;
+    height: 100%; /* Ocupa todo o espaço disponível exceto o dock */
+    margin: 0;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    background: transparent;
+    order: 1; /* Garante que fique acima do dock */
+}
+
+.container.minimized textarea {
+    font-size: 0.95rem; /* Fonte levemente menor para compactação */
+    padding: 12px;
+    scroll-behavior: smooth; /* Suaviza o auto-scroll */
+}
+
+/* Dock Fixo no Rodapé do Widget */
+.container.minimized .control-dock {
+    width: 100%;
+    padding: 8px 12px;
+    background: #f9fafb;
+    justify-content: space-between;
+    box-sizing: border-box;
+    flex-shrink: 0; /* Impede que o dock seja esmagado */
+    order: 2;
+    border: none;
+}
+
+/* Oculta elementos desnecessários no modo widget para limpar a visão */
 .container.minimized .header-title,
 .container.minimized .badge-pro,
 .container.minimized .subtitle,
 .container.minimized .editor-footer,
-.container.minimized .visualizer-container,
+.container.minimized .visualizer-container, /* Canvas oculto no mini */
 .container.minimized .btn-upload, 
 .container.minimized .btn-legal,  
 .container.minimized .btn-copy,
 .container.minimized .status-bar,
 .container.minimized .device-selector-container,
-.container.minimized .header-actions,
-.container.minimized .editor-area { 
+.container.minimized .header-actions { 
     display: none !important;
 }
 
@@ -89,18 +117,19 @@ body {
     margin: 0;
     width: 0;
     height: 0;
-    overflow: visible; /* Necessário para o botão de toggle ser clicável */
+    overflow: hidden;
 }
 
-/* Reposiciona o botão de maximizar */
+/* Reposiciona o botão de toggle para o topo flutuante */
 .container.minimized .btn-toggle-size {
-    position: fixed;
-    top: 50%;
-    right: 10px;
-    transform: translateY(-50%) scale(0.9);
-    background: #f3f4f6;
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: rgba(255, 255, 255, 0.9);
     z-index: 50;
-    padding: 6px;
+    padding: 4px;
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
 /* =============================================== */
@@ -138,7 +167,6 @@ body {
     font-weight: 700;
 }
 
-/* Área de botões do cabeçalho (Versão + Ajuda) */
 .header-actions {
     display: flex;
     align-items: center;
@@ -146,7 +174,6 @@ body {
     margin-left: 10px;
 }
 
-/* Botão de Versão (Pill) */
 .version-pill {
     background: #e5e7eb;
     border: none;
@@ -158,12 +185,8 @@ body {
     transition: all 0.2s;
     font-weight: 600;
 }
-.version-pill:hover { 
-    background: #d1d5db; 
-    color: var(--text-main); 
-}
+.version-pill:hover { background: #d1d5db; color: var(--text-main); }
 
-/* Botão de Ajuda e Glossário */
 .btn-help {
     background: transparent;
     border: none;
@@ -188,7 +211,6 @@ body {
     margin-bottom: 1rem;
 }
 
-/* Container do Canvas (Osciloscópio) */
 .visualizer-container {
     width: 100%;
     height: 60px;
@@ -200,6 +222,7 @@ body {
     border-radius: 8px;
     overflow: hidden;
     border: 1px solid var(--border);
+    transition: border-color 0.2s ease; /* Suaviza o feedback visual */
 }
 
 canvas#audioVisualizer {
@@ -240,6 +263,13 @@ canvas#audioVisualizer {
     border-color: var(--c-mic);
     box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
     background: #fff;
+}
+
+/* CLASSE DE FEEDBACK DE ÁUDIO (PERFORMANCE) */
+/* Usada tanto no Canvas quanto no Editor (Mini Mode) */
+.audio-detected {
+    border-color: #10b981 !important; /* Verde Emerald */
+    box-shadow: inset 0 0 0 2px rgba(16, 185, 129, 0.1) !important;
 }
 
 textarea {
@@ -390,15 +420,9 @@ textarea {
 
 /* --- Ajustes DOCK no Modo Compacto --- */
 .container.minimized .control-dock {
-    width: 100%;
-    padding: 0 40px 0 0; /* Espaço para botão de toggle na direita */
-    justify-content: flex-start;
-    gap: 12px;
-    border: none;
-    background: transparent;
+    /* Ajustes específicos feitos acima na seção .minimized */
 }
 
-/* Estilo do Container do Seletor */
 .device-selector-container {
     display: flex;
     align-items: center;
@@ -406,7 +430,6 @@ textarea {
     margin-right: 8px;
 }
 
-/* Estilo do Select (Dropdown) */
 .device-select {
     width: 100%;
     background: #fff;
@@ -478,16 +501,15 @@ textarea {
 }
 
 .container.minimized .btn-mic {
-    width: 48px; /* Botão principal levemente maior */
+    width: 48px; 
     height: 48px;
-    order: -1; /* Microfone primeiro */
-    margin-right: 10px;
+    margin: 0;
     box-shadow: 0 4px 10px rgba(79, 70, 229, 0.25);
 }
 
 /* Garante visibilidade dos botões essenciais no mini */
-.container.minimized .btn-magic { display: flex !important; background-color: #f59e0b; order: 2; }
-.container.minimized .btn-clear { display: flex !important; border: none; background: #fee2e2; color: #ef4444; order: 3; }
+.container.minimized .btn-magic { display: flex !important; background-color: #f59e0b; }
+.container.minimized .btn-clear { display: flex !important; border: none; background: #fee2e2; color: #ef4444; }
 
 .container.minimized .btn-action span { display: none; }
 
@@ -582,7 +604,6 @@ textarea {
     padding-right: 10px; 
 }
 
-/* Estilo do Item de Versão */
 .version-item { 
     margin-bottom: 1.5rem; 
     border-bottom: 1px solid var(--border); 
