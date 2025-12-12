@@ -1,6 +1,6 @@
 /**
  * Serviço de Integração com Google Gemini (AI)
- * Estrutura baseada em Classe (OOP) com modelo 'gemini-1.5-flash-latest'.
+ * Estrutura baseada em Classe (OOP) com modelo 'gemini-flash-latest'.
  */
 
 import { CONFIG } from './config.js';
@@ -9,7 +9,7 @@ class GeminiService {
     constructor() {
         this.config = {
             // Modelo Flash Latest (Rápido e econômico)
-            model: 'gemini-1.5-flash-latest', 
+            model: 'gemini-flash-latest', 
             // Usa a constante do config.js ou fallback para string
             storageKeyApi: CONFIG?.STORAGE_KEYS?.API || 'ditado_digital_gemini_key'
         };
