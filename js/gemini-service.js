@@ -1,73 +1,114 @@
 /**
  * Serviço de Integração com Google Gemini (AI)
- * Responsável pela comunicação com a API para correção e formatação.
+ * Estrutura baseada em Classe (OOP) com modelo 'gemini-1.5-flash-latest'.
  */
 
-const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+import { CONFIG } from './config.js';
 
-export const aiService = {
-    
-    // Recupera a chave salva ou retorna null
+class GeminiService {
+    constructor() {
+        this.config = {
+            // Modelo Flash Latest (Rápido e econômico)
+            model: 'gemini-1.5-flash-latest', 
+            // Usa a constante do config.js ou fallback para string
+            storageKeyApi: CONFIG?.STORAGE_KEYS?.API || 'ditado_digital_gemini_key'
+        };
+    }
+
+    /**
+     * Recupera ou solicita a API Key do LocalStorage/Prompt
+     */
     getApiKey() {
-        return localStorage.getItem('dd_gemini_key');
-    },
-
-    // Salva a chave e testa (simples)
-    saveApiKey(key) {
-        if (!key.startsWith('AIza')) {
-            alert('A chave parece inválida. Ela geralmente começa com "AIza".');
-            return false;
-        }
-        localStorage.setItem('dd_gemini_key', key);
-        return true;
-    },
-
-    // Método genérico para chamar a API
-    async generateText(promptText) {
-        const key = this.getApiKey();
+        let key = localStorage.getItem(this.config.storageKeyApi);
+        
+        // Fluxo de Primeira Utilização
         if (!key) {
-            const newKey = prompt("Insira sua Google Gemini API Key (Obtenha em aistudio.google.com):");
-            if (newKey && this.saveApiKey(newKey)) {
-                return this.generateText(promptText); // Tenta de novo recursivamente
+            key = prompt("🔑 Configuração Inicial:\n\nInsira sua API Key do Google Gemini para ativar a IA.\n(Obtenha gratuitamente em: aistudio.google.com)");
+            if (key) {
+                key = key.trim();
+                // Validação básica para evitar lixo no storage
+                if (key.startsWith('AIza')) {
+                    localStorage.setItem(this.config.storageKeyApi, key);
+                } else {
+                    alert("A chave parece inválida (deve começar com AIza). Tente novamente.");
+                    return null;
+                }
             }
-            throw new Error("API Key não configurada.");
         }
+        return key;
+    }
+
+    /**
+     * Método Core: Envia payload para a API
+     * @param {Object} payload - O corpo JSON da requisição
+     */
+    async generate(payload) {
+        const apiKey = this.getApiKey();
+        if (!apiKey) {
+            throw new Error("Ação cancelada: API Key não fornecida.");
+        }
+
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.config.model}:generateContent?key=${apiKey}`;
 
         try {
-            const response = await fetch(`${API_URL}?key=${key}`, {
+            const response = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{
-                        parts: [{ text: promptText }]
-                    }]
-                })
+                body: JSON.stringify(payload)
             });
 
             const data = await response.json();
 
+            // Tratamento de Erros da API
             if (data.error) {
-                throw new Error(data.error.message);
+                // Se a chave for inválida/expirada (400 ou 403), limpa para pedir de novo
+                if (data.error.code === 400 || data.error.code === 403) {
+                    console.warn("Chave inválida removida. O usuário será solicitado novamente.");
+                    localStorage.removeItem(this.config.storageKeyApi);
+                }
+                throw new Error(`Google API Error: ${data.error.message}`);
             }
 
-            // Extrai o texto da resposta complexa do Gemini
-            return data.candidates[0].content.parts[0].text;
+            // Validação de Segurança e Retorno
+            if (!data.candidates || data.candidates.length === 0) {
+                if (data.promptFeedback?.blockReason) {
+                    throw new Error(`Bloqueado pela IA: ${data.promptFeedback.blockReason}`);
+                }
+                throw new Error("A IA não retornou texto. Tente novamente.");
+            }
+            
+            return data.candidates[0].content.parts[0].text.trim();
 
         } catch (error) {
-            console.error("Erro Gemini:", error);
+            console.error("Gemini Service Error:", error);
             throw error;
         }
-    },
-
-    // Wrapper: Corrigir Gramática
-    async fixGrammar(text) {
-        const prompt = `Corrija a gramática e pontuação do seguinte texto (pt-BR), mantendo o tom original e sem adicionar comentários ou aspas: \n\n"${text}"`;
-        return await this.generateText(prompt);
-    },
-
-    // Wrapper: Converter para Jurídico
-    async convertToLegal(text) {
-        const prompt = `Reescreva o seguinte texto em linguagem jurídica formal (advocacia), corrigindo erros de fonética comuns em ditados, sem adicionar comentários extras: \n\n"${text}"`;
-        return await this.generateText(prompt);
     }
-};
+
+    /**
+     * Método Auxiliar: Monta o payload padrão de texto
+     */
+    async generateFromText(promptText) {
+        return this.generate({
+            contents: [{ parts: [{ text: promptText }] }]
+        });
+    }
+
+    // =================================================================
+    // Métodos Específicos da Aplicação (Chamados pelo main.js)
+    // =================================================================
+
+    async fixGrammar(text) {
+        const prompt = `Atue como um revisor profissional. Corrija gramática, pontuação e coesão do texto abaixo (Português Brasil). Mantenha o tom original, sem comentários extras:\n\n"${text}"`;
+        return this.generateFromText(prompt);
+    }
+
+    async convertToLegal(text) {
+        const prompt = `Atue como um advogado. Reescreva o texto abaixo em linguagem jurídica formal (Juridiquês), corrigindo erros fonéticos de ditado. Use termos como 'data venia' quando apropriado. Retorne APENAS o texto reescrito:\n\n"${text}"`;
+        return this.generateFromText(prompt);
+    }
+}
+
+// Exporta uma INSTÂNCIA da classe para manter compatibilidade com o main.js
+// O main.js importa como "aiService", então aiService.fixGrammar() funcionará.
+export const aiService = new GeminiService();
