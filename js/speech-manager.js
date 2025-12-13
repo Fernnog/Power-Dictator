@@ -1,3 +1,5 @@
+import { CONFIG } from './config.js';
+
 export class SpeechManager {
     constructor(visualizerCanvasId, onResultCallback, onStatusChange) {
         this.isRecording = false;
@@ -136,20 +138,19 @@ export class SpeechManager {
                 await this.audioContext.resume();
             }
 
-            // 2. Configura Stream de Áudio com FALLBACK e MELHORIA DE QUALIDADE (Prioridade 2)
+            // 2. Configura Stream de Áudio com FALLBACK e CONFIGURAÇÃO CENTRALIZADA (v1.0.6)
             let stream;
             
             try {
                 const constraints = {
                     audio: {
+                        // Se houver ID específico selecionado, usa 'exact', senão undefined
                         deviceId: this.selectedDeviceId && this.selectedDeviceId !== 'default' 
                             ? { exact: this.selectedDeviceId } 
                             : undefined,
-                        echoCancellation: true, // Remove eco
-                        noiseSuppression: true, // Remove ruído de fundo
-                        autoGainControl: true,  // Nivela o volume
-                        channelCount: 1,        // FORÇA MONO: Evita cancelamento de fase na voz
-                        sampleRate: 48000       // ALTA FIDELIDADE: Solicita 48kHz (Qualidade de DVD)
+                        
+                        // Injeta configurações do config.js (Mono, 48kHz, DSP)
+                        ...CONFIG.AUDIO.CONSTRAINTS
                     }
                 };
                 stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -215,7 +216,6 @@ export class SpeechManager {
 
         const draw = () => {
             // Se isRecording for false, o loop morre aqui.
-            // Graças à correção no método start(), isso agora será true na primeira execução.
             if (!this.isRecording) return;
             
             requestAnimationFrame(draw);
