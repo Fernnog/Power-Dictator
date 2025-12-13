@@ -136,7 +136,7 @@ export class SpeechManager {
                 await this.audioContext.resume();
             }
 
-            // 2. Configura Stream de Áudio com FALLBACK
+            // 2. Configura Stream de Áudio com FALLBACK e MELHORIA DE QUALIDADE (Prioridade 2)
             let stream;
             
             try {
@@ -145,15 +145,17 @@ export class SpeechManager {
                         deviceId: this.selectedDeviceId && this.selectedDeviceId !== 'default' 
                             ? { exact: this.selectedDeviceId } 
                             : undefined,
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true
+                        echoCancellation: true, // Remove eco
+                        noiseSuppression: true, // Remove ruído de fundo
+                        autoGainControl: true,  // Nivela o volume
+                        channelCount: 1,        // FORÇA MONO: Evita cancelamento de fase na voz
+                        sampleRate: 48000       // ALTA FIDELIDADE: Solicita 48kHz (Qualidade de DVD)
                     }
                 };
                 stream = await navigator.mediaDevices.getUserMedia(constraints);
                 
             } catch (deviceErr) {
-                console.warn("Microfone específico falhou ou não encontrado. Usando padrão.", deviceErr);
+                console.warn("Microfone específico falhou ou não suporta configs avançadas. Usando padrão.", deviceErr);
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             }
             
