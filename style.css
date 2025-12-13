@@ -91,7 +91,8 @@ body {
     width: 100%;
     padding: 8px 12px;
     background: #f9fafb;
-    justify-content: space-between;
+    justify-content: space-evenly; /* Prioridade 3: Melhor distribuição para 5 botões */
+    gap: 8px; /* Reduzido levemente para caber tudo */
     box-sizing: border-box;
     flex-shrink: 0; /* Impede que o dock seja esmagado */
     order: 2;
@@ -99,18 +100,24 @@ body {
 }
 
 /* Oculta elementos desnecessários no modo widget para limpar a visão */
+/* ALTERAÇÃO PRIORIDADE 1: Removidos .btn-legal e .btn-copy desta lista */
 .container.minimized .header-title,
 .container.minimized .badge-pro,
 .container.minimized .subtitle,
 .container.minimized .editor-footer,
 .container.minimized .visualizer-container, /* Canvas oculto no mini */
 .container.minimized .btn-upload, 
-.container.minimized .btn-legal,  
-.container.minimized .btn-copy,
 .container.minimized .status-bar,
 .container.minimized .device-selector-container,
 .container.minimized .header-actions { 
     display: none !important;
+}
+
+/* ALTERAÇÃO PRIORIDADE 1: Regras explícitas para exibir os botões */
+.container.minimized .btn-legal,
+.container.minimized .btn-copy {
+    display: flex !important;
+    flex: 0 0 auto;
 }
 
 .container.minimized .app-header {
