@@ -78,7 +78,7 @@ O projeto segue a filosofia **"Vanilla Performance"**: zero frameworks, zero bui
 │   └── gemini-service.js # Integração com Google AI
 └── README.md        # Documentação Técnica
 
-```bash
+```
 
 ## ⚡ Como Usar
 
