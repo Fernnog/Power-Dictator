@@ -3,6 +3,7 @@ import { aiService } from './gemini-service.js';
 import { changelogData, currentVersion } from './changelog.js';
 import Glossary from './glossary.js';
 import { CONFIG } from './config.js';
+import { HotkeyManager } from './hotkeys.js';
 
 // ========================================================
 // 1. REFERÊNCIAS DE UI (DOM Elements)
@@ -112,20 +113,33 @@ const glossaryManager = new Glossary((terms) => {
 });
 
 // ========================================================
-// 4. AUTO-STOP & SEGURANÇA
+// 4. AUXILIARES VISUAIS & SEGURANÇA (v1.0.6)
 // ========================================================
+
+/**
+ * Remove o efeito de pulso de todos os botões de ação.
+ * Usado para limpar o estado visual antes de iniciar uma nova ação ou ao finalizar.
+ */
+const stopVisualEffects = () => {
+    [ui.micBtn, ui.btnAiLegal, ui.btnAiFix, ui.btnCopy, ui.btnClear].forEach(btn => {
+        if(btn) btn.classList.remove('pulsing');
+    });
+};
+
 const executeSafely = async (actionCallback) => {
     if (speechManager && speechManager.isRecording) {
         speechManager.stop();
         toggleWakeLock(false);
         
-        // Feedback visual
+        // Feedback visual de interrupção
         const originalColor = ui.micBtn.style.backgroundColor;
         ui.micBtn.style.backgroundColor = '#f59e0b'; // Amber warning
         
         await new Promise(resolve => setTimeout(resolve, 300));
         ui.micBtn.style.backgroundColor = '';
     }
+    // Garante limpeza visual antes da ação
+    stopVisualEffects();
     actionCallback();
 };
 
@@ -157,7 +171,6 @@ const handleTranscriptionResult = (finalText, interimText) => {
         updateCharCount();
 
         // [v1.0.4] Auto-Scroll Inteligente
-        // Se estiver no modo minimizado (onde o espaço é curto), rola para baixo
         if (ui.container.classList.contains('minimized')) {
             ui.textarea.scrollTop = ui.textarea.scrollHeight;
         }
@@ -165,24 +178,34 @@ const handleTranscriptionResult = (finalText, interimText) => {
 };
 
 const updateStatus = (status) => {
-    ui.statusMsg.className = 'status-bar'; // Reset
+    ui.statusMsg.className = 'status-bar'; // Reset texto
+    
+    // [v1.0.6] Lógica de Feedback Visual (Pulso)
+    // Primeiro limpamos estados anteriores que não sejam persistentes
+    // Nota: Não limpamos tudo aqui para não interferir com animações assíncronas de botões de IA
+    // Apenas gerenciamos o estado do Mic e Status Bar
     
     if (status === 'recording') {
         ui.statusMsg.textContent = "GRAVANDO";
         ui.statusMsg.classList.add('active', 'status-recording');
         ui.micBtn.classList.add('recording');
+        ui.micBtn.classList.add('pulsing'); // Efeito Visual v1.0.6
     } else if (status === 'processing') {
         ui.statusMsg.textContent = "PROCESSANDO IA...";
         ui.statusMsg.classList.add('active', 'status-ai');
+        // O botão específico da IA ganha o pulso no click listener, não aqui.
     } else if (status === 'error') {
         ui.statusMsg.textContent = "ERRO / MICROFONE BLOQUEADO";
         ui.statusMsg.classList.add('active', 'status-error');
         ui.micBtn.classList.remove('recording');
+        stopVisualEffects(); // Remove pulsos em erro
         toggleWakeLock(false);
     } else {
+        // IDLE
         ui.statusMsg.textContent = "";
         ui.statusMsg.classList.remove('active');
         ui.micBtn.classList.remove('recording');
+        ui.micBtn.classList.remove('pulsing'); 
     }
 };
 
@@ -235,6 +258,7 @@ ui.micBtn.addEventListener('click', () => {
         speechManager.stop();
         toggleWakeLock(false);
     } else {
+        stopVisualEffects(); // Garante que nenhum outro botão esteja pulsando
         speechManager.start();
         toggleWakeLock(true);
     }
@@ -253,7 +277,10 @@ ui.btnAiFix.addEventListener('click', () => {
     if (!text) return alert("Digite ou dite algo primeiro.");
 
     executeSafely(async () => {
+        stopVisualEffects();
+        ui.btnAiFix.classList.add('pulsing'); // [v1.0.6] Feedback Visual
         updateStatus('processing');
+        
         try {
             const result = await aiService.fixGrammar(text);
             ui.textarea.value = result;
@@ -263,6 +290,7 @@ ui.btnAiFix.addEventListener('click', () => {
             alert("Erro na IA: " + error.message);
             updateStatus('error');
         } finally {
+            ui.btnAiFix.classList.remove('pulsing'); // [v1.0.6] Limpa Feedback
             setTimeout(() => updateStatus('idle'), 2000);
         }
     });
@@ -274,7 +302,10 @@ ui.btnAiLegal.addEventListener('click', () => {
     if (!text) return alert("Digite ou dite algo primeiro.");
 
     executeSafely(async () => {
+        stopVisualEffects();
+        ui.btnAiLegal.classList.add('pulsing'); // [v1.0.6] Feedback Visual
         updateStatus('processing');
+        
         try {
             const result = await aiService.convertToLegal(text);
             ui.textarea.value = result;
@@ -284,6 +315,7 @@ ui.btnAiLegal.addEventListener('click', () => {
             alert("Erro na IA: " + error.message);
             updateStatus('error');
         } finally {
+            ui.btnAiLegal.classList.remove('pulsing'); // [v1.0.6] Limpa Feedback
             setTimeout(() => updateStatus('idle'), 2000);
         }
     });
@@ -292,18 +324,26 @@ ui.btnAiLegal.addEventListener('click', () => {
 // Copiar
 ui.btnCopy.addEventListener('click', () => {
     executeSafely(() => {
+        stopVisualEffects(); // Limpa outros
+        
+        // Lógica de Cópia
         ui.textarea.select();
         document.execCommand('copy');
         navigator.clipboard.writeText(ui.textarea.value);
         
+        // Feedback de Texto
         const originalText = ui.btnCopy.querySelector('span').textContent;
         ui.btnCopy.querySelector('span').textContent = "Copiado!";
         ui.btnCopy.classList.add('status-success');
         
+        // [v1.0.6] Feedback Visual (Flash Verde)
+        ui.btnCopy.classList.add('pulsing'); 
+        
         setTimeout(() => {
             ui.btnCopy.querySelector('span').textContent = originalText;
             ui.btnCopy.classList.remove('status-success');
-        }, 2000);
+            ui.btnCopy.classList.remove('pulsing'); // Remove pulso
+        }, 1500); // 1.5s = Tempo da animação CSS
     });
 });
 
@@ -360,9 +400,9 @@ ui.toggleSizeBtn.addEventListener('click', () => {
     
     // Dimensões Alvo (Normal vs Widget Vertical Post-it)
     const targetWidth = isMin ? 360 : 920; 
-    const targetHeight = isMin ? 500 : 800; // Altura ajustada para leitura
+    const targetHeight = isMin ? 500 : 800; 
 
-    // Se estiver rodando como popup (janela independente)
+    // Se estiver rodando como popup
     if (window.outerWidth) {
         try {
             const screenLeft = window.screen.availLeft || 0;
@@ -370,7 +410,6 @@ ui.toggleSizeBtn.addEventListener('click', () => {
             const screenW = window.screen.availWidth;
             const screenH = window.screen.availHeight;
 
-            // Calcula posição: Canto Inferior Direito com margem de segurança
             const left = (screenLeft + screenW) - targetWidth - 20;
             const top = (screenTop + screenH) - targetHeight - 20;
 
@@ -381,7 +420,6 @@ ui.toggleSizeBtn.addEventListener('click', () => {
         }
     }
     
-    // [v1.0.4] Auto-scroll imediato ao minimizar para ver o texto recente
     if (isMin) {
         setTimeout(() => {
             ui.textarea.scrollTop = ui.textarea.scrollHeight;
@@ -429,7 +467,7 @@ function renderChangelog() {
 // Glossário Modal
 if (ui.glossaryBtn && ui.glossaryModal) {
     ui.glossaryBtn.addEventListener('click', () => {
-        glossaryManager.renderCallback(glossaryManager.getTerms()); // Força render
+        glossaryManager.renderCallback(glossaryManager.getTerms()); 
         ui.glossaryModal.style.display = 'flex';
     });
     ui.closeGlossaryBtn.addEventListener('click', () => ui.glossaryModal.style.display = 'none');
@@ -440,18 +478,15 @@ if (ui.glossaryBtn && ui.glossaryModal) {
     });
 }
 
-// Atalhos Globais
-document.addEventListener('keydown', (e) => {
-    if (!e.altKey) return;
-    if (e.code === 'KeyG') { e.preventDefault(); ui.micBtn.click(); }
-    if (e.code === 'KeyL') { e.preventDefault(); executeSafely(() => handleClearAction()); }
-    if (e.code === 'KeyC') { e.preventDefault(); ui.btnCopy.click(); }
-    if (e.code === 'KeyZ') { e.preventDefault(); performUndo(); }
-});
-
 // Inicialização
 window.addEventListener('DOMContentLoaded', () => {
     loadContent();
     ui.versionBtn.textContent = `v${currentVersion}`;
     initDeviceSelector();
+
+    // Inicializa Gerenciador de Atalhos (incluindo Alt + M)
+    new HotkeyManager(ui, {
+        triggerClear: () => executeSafely(() => handleClearAction()),
+        triggerUndo: performUndo
+    });
 });
