@@ -77,7 +77,7 @@ body {
     border-bottom: 1px solid var(--border);
     border-radius: 0;
     background: transparent;
-    order: 1; /* Garante que fique acima do dock */
+    order: 1; /* Garante que fique acima do dock e abaixo do visualizador */
 }
 
 .container.minimized textarea {
@@ -100,17 +100,35 @@ body {
 }
 
 /* Oculta elementos desnecessários no modo widget para limpar a visão */
-/* ALTERAÇÃO PRIORIDADE 1: Removidos .btn-legal e .btn-copy desta lista */
+/* MODIFICAÇÃO v1.0.6: .visualizer-container REMOVIDO desta lista para ser exibido */
 .container.minimized .header-title,
 .container.minimized .badge-pro,
 .container.minimized .subtitle,
 .container.minimized .editor-footer,
-.container.minimized .visualizer-container, /* Canvas oculto no mini */
 .container.minimized .btn-upload, 
 .container.minimized .status-bar,
 .container.minimized .device-selector-container,
 .container.minimized .header-actions { 
     display: none !important;
+}
+
+/* VISUALIZADOR SLIM (MODO WIDGET) - v1.0.6 */
+.container.minimized .visualizer-container {
+    display: flex !important;
+    height: 25px; /* Altura reduzida (era 60px) */
+    min-height: 25px;
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    background: #fdfdfd;
+    border-bottom: 1px solid var(--border);
+    order: 0; /* Garante que fique no topo absoluto */
+}
+
+/* Ajuste fino para a onda parecer maior dentro do espaço pequeno */
+.container.minimized canvas#audioVisualizer {
+    height: 100%;
+    width: 100%;
 }
 
 /* ALTERAÇÃO PRIORIDADE 1: Regras explícitas para exibir os botões */
@@ -775,7 +793,10 @@ kbd {
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* --- ANIMAÇÕES DE ESTADO --- */
+/* =============================================== */
+/* 10. ANIMAÇÕES DE FEEDBACK VISUAL (v1.0.6)       */
+/* =============================================== */
+
 @keyframes btnPulse {
     0% { box-shadow: 0 0 0 0 rgba(var(--pulse-color), 0.7); }
     70% { box-shadow: 0 0 0 10px rgba(var(--pulse-color), 0); }
@@ -785,10 +806,10 @@ kbd {
 .pulsing {
     animation: btnPulse 1.5s infinite;
     position: relative;
-    z-index: 100; /* Garante que o brilho não seja cortado por vizinhos */
+    z-index: 100; /* Garante visibilidade acima de vizinhos */
 }
 
-/* Mapeamento de Cores (RGB puro para permitir opacidade dinâmica) */
+/* Mapeamento de Cores para o efeito Pulse */
 .btn-mic.pulsing   { --pulse-color: 239, 68, 68; }   /* Red-500 */
 .btn-legal.pulsing, 
 .btn-magic.pulsing { --pulse-color: 14, 165, 233; }  /* Sky-500 */
