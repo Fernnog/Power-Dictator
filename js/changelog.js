@@ -2,7 +2,7 @@
  * Constante de Versão Atual
  * Usada para exibir no badge do Header (app.html)
  */
-export const currentVersion = "1.0.5";
+export const currentVersion = "1.0.6";
 
 /**
  * Histórico de Versões
@@ -10,6 +10,15 @@ export const currentVersion = "1.0.5";
  * A ordem deve ser decrescente (mais recente primeiro).
  */
 export const changelogData = [
+    {
+        version: "1.0.6",
+        date: "01/11/2023",
+        changes: [
+            "🔮 <strong>Feedback Visual Ativo (Pulse):</strong> Nova linguagem visual onde os botões 'respiram' cores (Vermelho/Gravando, Azul/IA, Verde/Sucesso). Isso permite saber o status exato do app mesmo no modo Widget, onde não há espaço para textos.",
+            "⌨️ <strong>Alternância Rápida (Alt+M):</strong> Novo atalho de teclado para expandir ou contrair o 'Modo Widget' instantaneamente, permitindo um fluxo de trabalho 100% sem mouse.",
+            "🏗️ <strong>Arquitetura de Áudio:</strong> Centralização das configurações de hardware (DSP) no arquivo de configuração global, garantindo maior estabilidade e facilidade de manutenção nas frequências de captura."
+        ]
+    },
     {
         version: "1.0.5",
         date: "30/10/2023",
