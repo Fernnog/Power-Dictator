@@ -466,4 +466,15 @@ window.addEventListener('DOMContentLoaded', () => {
         triggerClear: () => executeSafely(() => handleClearAction()),
         triggerUndo: performUndo
     });
+// [ENGENHARIA] Auto-Detect Compact Mode via URL Parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('mode') === 'compact') {
+        // Aguarda um ciclo de renderização para garantir que o CSS carregou
+        setTimeout(() => {
+            // Se ainda não estiver minimizado, aciona o toggle
+            if (!ui.container.classList.contains('minimized')) {
+                ui.toggleSizeBtn.click();
+            }
+        }, 100);
+    }
 });
