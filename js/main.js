@@ -81,7 +81,6 @@ document.addEventListener('visibilitychange', async () => {
 // 3. GLOSSÁRIO (Instanciação do Módulo)
 // ========================================================
 const glossaryManager = new Glossary((terms) => {
-    // Callback de renderização
     if (!ui.glossaryList) return;
     ui.glossaryList.innerHTML = '';
     
@@ -104,7 +103,6 @@ const glossaryManager = new Glossary((terms) => {
         ui.glossaryList.appendChild(div);
     });
 
-    // Event listeners para deletar
     document.querySelectorAll('.btn-delete-term').forEach(btn => {
         btn.addEventListener('click', (e) => {
             glossaryManager.remove(parseInt(e.target.dataset.index));
@@ -113,13 +111,9 @@ const glossaryManager = new Glossary((terms) => {
 });
 
 // ========================================================
-// 4. AUXILIARES VISUAIS & SEGURANÇA (v1.0.6)
+// 4. AUXILIARES VISUAIS & SEGURANÇA
 // ========================================================
 
-/**
- * Remove o efeito de pulso de todos os botões de ação.
- * Usado para limpar o estado visual antes de iniciar uma nova ação ou ao finalizar.
- */
 const stopVisualEffects = () => {
     [ui.micBtn, ui.btnAiLegal, ui.btnAiFix, ui.btnCopy, ui.btnClear].forEach(btn => {
         if(btn) btn.classList.remove('pulsing');
@@ -127,23 +121,18 @@ const stopVisualEffects = () => {
 };
 
 const executeSafely = async (actionCallback) => {
-    // [MODIFICADO] Prioridade 2: Auto-destruição do botão Desfazer
-    // Se o usuário iniciar qualquer outra ação, removemos a chance de desfazer para limpar a tela
-    ui.toastContainer.innerHTML = '';
+    // AUTO-CLEANUP: Limpa botão undo ao iniciar outra ação
+    ui.toastContainer.innerHTML = ''; 
     if (undoTimeout) clearTimeout(undoTimeout);
 
     if (speechManager && speechManager.isRecording) {
         speechManager.stop();
         toggleWakeLock(false);
-        
-        // Feedback visual de interrupção
         const originalColor = ui.micBtn.style.backgroundColor;
-        ui.micBtn.style.backgroundColor = '#f59e0b'; // Amber warning
-        
+        ui.micBtn.style.backgroundColor = '#f59e0b'; 
         await new Promise(resolve => setTimeout(resolve, 300));
         ui.micBtn.style.backgroundColor = '';
     }
-    // Garante limpeza visual antes da ação
     stopVisualEffects();
     actionCallback();
 };
@@ -153,29 +142,23 @@ const executeSafely = async (actionCallback) => {
 // ========================================================
 const handleTranscriptionResult = (finalText, interimText) => {
     if (finalText) {
-        // Processa texto com Glossário
         const processedText = glossaryManager.process(finalText);
         
-        // Insere no cursor
         const start = ui.textarea.selectionStart;
         const end = ui.textarea.selectionEnd;
         const text = ui.textarea.value;
         const before = text.substring(0, start);
         const after = text.substring(end, text.length);
-        
-        // Adiciona espaço inteligente
         const prefix = (before.length > 0 && !before.endsWith(' ') && !before.endsWith('\n')) ? ' ' : '';
         
         ui.textarea.value = before + prefix + processedText + after;
         
-        // Move cursor
         const newCursorPos = start + prefix.length + processedText.length;
         ui.textarea.setSelectionRange(newCursorPos, newCursorPos);
         
         saveContent();
         updateCharCount();
 
-        // [v1.0.4] Auto-Scroll Inteligente
         if (ui.container.classList.contains('minimized')) {
             ui.textarea.scrollTop = ui.textarea.scrollHeight;
         }
@@ -183,15 +166,11 @@ const handleTranscriptionResult = (finalText, interimText) => {
 };
 
 const updateStatus = (status) => {
-    ui.statusMsg.className = 'status-bar'; // Reset texto
-    
-    // [v1.0.6] Lógica de Feedback Visual (Pulso)
-    
+    ui.statusMsg.className = 'status-bar';
     if (status === 'recording') {
         ui.statusMsg.textContent = "GRAVANDO";
         ui.statusMsg.classList.add('active', 'status-recording');
-        ui.micBtn.classList.add('recording');
-        ui.micBtn.classList.add('pulsing'); 
+        ui.micBtn.classList.add('recording', 'pulsing');
     } else if (status === 'processing') {
         ui.statusMsg.textContent = "PROCESSANDO IA...";
         ui.statusMsg.classList.add('active', 'status-ai');
@@ -202,24 +181,21 @@ const updateStatus = (status) => {
         stopVisualEffects(); 
         toggleWakeLock(false);
     } else {
-        // IDLE
         ui.statusMsg.textContent = "";
         ui.statusMsg.classList.remove('active');
-        ui.micBtn.classList.remove('recording');
-        ui.micBtn.classList.remove('pulsing'); 
+        ui.micBtn.classList.remove('recording', 'pulsing'); 
     }
 };
 
 const speechManager = new SpeechManager('audioVisualizer', handleTranscriptionResult, updateStatus);
 
 // ========================================================
-// 6. SELETOR DE DISPOSITIVOS (Com Persistência)
+// 6. SELETOR DE DISPOSITIVOS
 // ========================================================
 async function initDeviceSelector() {
     const populate = (devices) => {
         ui.audioSource.innerHTML = '<option value="default">Padrão do Sistema</option>';
         const savedId = localStorage.getItem(CONFIG.STORAGE_KEYS.MIC);
-        
         devices.forEach(device => {
             const option = document.createElement('option');
             option.value = device.deviceId;
@@ -227,25 +203,17 @@ async function initDeviceSelector() {
             if (device.deviceId === savedId) option.selected = true;
             ui.audioSource.appendChild(option);
         });
-        
         if (savedId) speechManager.setDeviceId(savedId);
     };
 
-    // 1. Carrega inicial
     const devices = await speechManager.getAudioDevices();
     populate(devices);
-
-    // 2. Listener de Hotplug (USB conecta/desconecta)
     speechManager.listenToDeviceChanges((updatedDevices) => populate(updatedDevices));
 
-    // 3. Salva preferência
     ui.audioSource.addEventListener('change', (e) => {
         const val = e.target.value;
         speechManager.setDeviceId(val);
         localStorage.setItem(CONFIG.STORAGE_KEYS.MIC, val);
-        
-        ui.audioSource.style.borderColor = '#4f46e5';
-        setTimeout(() => ui.audioSource.style.borderColor = '', 300);
     });
 }
 
@@ -253,35 +221,33 @@ async function initDeviceSelector() {
 // 7. EVENT LISTENERS
 // ========================================================
 
-// Botão Gravar
 ui.micBtn.addEventListener('click', () => {
     if (speechManager.isRecording) {
         speechManager.stop();
         toggleWakeLock(false);
     } else {
-        stopVisualEffects(); // Garante que nenhum outro botão esteja pulsando
+        ui.toastContainer.innerHTML = ''; 
+        if (undoTimeout) clearTimeout(undoTimeout);
+        stopVisualEffects(); 
         speechManager.start();
         toggleWakeLock(true);
     }
 });
 
-// Upload
 ui.fileInput.addEventListener('change', () => {
     executeSafely(() => {
-        alert("Upload de áudio requer backend. Suporte apenas para arquivos de texto no momento.");
+        alert("Upload de áudio requer backend.");
     });
 });
 
-// IA: Gramática
 ui.btnAiFix.addEventListener('click', () => {
     const text = ui.textarea.value.trim();
     if (!text) return alert("Digite ou dite algo primeiro.");
 
     executeSafely(async () => {
         stopVisualEffects();
-        ui.btnAiFix.classList.add('pulsing'); // [v1.0.6] Feedback Visual
+        ui.btnAiFix.classList.add('pulsing'); 
         updateStatus('processing');
-        
         try {
             const result = await aiService.fixGrammar(text);
             ui.textarea.value = result;
@@ -291,22 +257,20 @@ ui.btnAiFix.addEventListener('click', () => {
             alert("Erro na IA: " + error.message);
             updateStatus('error');
         } finally {
-            ui.btnAiFix.classList.remove('pulsing'); // [v1.0.6] Limpa Feedback
+            ui.btnAiFix.classList.remove('pulsing'); 
             setTimeout(() => updateStatus('idle'), 2000);
         }
     });
 });
 
-// IA: Jurídico
 ui.btnAiLegal.addEventListener('click', () => {
     const text = ui.textarea.value.trim();
     if (!text) return alert("Digite ou dite algo primeiro.");
 
     executeSafely(async () => {
         stopVisualEffects();
-        ui.btnAiLegal.classList.add('pulsing'); // [v1.0.6] Feedback Visual
+        ui.btnAiLegal.classList.add('pulsing'); 
         updateStatus('processing');
-        
         try {
             const result = await aiService.convertToLegal(text);
             ui.textarea.value = result;
@@ -316,39 +280,30 @@ ui.btnAiLegal.addEventListener('click', () => {
             alert("Erro na IA: " + error.message);
             updateStatus('error');
         } finally {
-            ui.btnAiLegal.classList.remove('pulsing'); // [v1.0.6] Limpa Feedback
+            ui.btnAiLegal.classList.remove('pulsing'); 
             setTimeout(() => updateStatus('idle'), 2000);
         }
     });
 });
 
-// Copiar
 ui.btnCopy.addEventListener('click', () => {
     executeSafely(() => {
-        stopVisualEffects(); // Limpa outros
-        
-        // Lógica de Cópia
+        stopVisualEffects(); 
         ui.textarea.select();
         document.execCommand('copy');
         navigator.clipboard.writeText(ui.textarea.value);
         
-        // Feedback de Texto
         const originalText = ui.btnCopy.querySelector('span').textContent;
         ui.btnCopy.querySelector('span').textContent = "Copiado!";
-        ui.btnCopy.classList.add('status-success');
-        
-        // [v1.0.6] Feedback Visual (Flash Verde)
-        ui.btnCopy.classList.add('pulsing'); 
+        ui.btnCopy.classList.add('status-success', 'pulsing');
         
         setTimeout(() => {
             ui.btnCopy.querySelector('span').textContent = originalText;
-            ui.btnCopy.classList.remove('status-success');
-            ui.btnCopy.classList.remove('pulsing'); // Remove pulso
-        }, 1500); // 1.5s = Tempo da animação CSS
+            ui.btnCopy.classList.remove('status-success', 'pulsing');
+        }, 1500); 
     });
 });
 
-// Limpar com Undo
 ui.btnClear.addEventListener('click', () => executeSafely(() => handleClearAction()));
 
 function handleClearAction() {
@@ -360,14 +315,10 @@ function handleClearAction() {
     showUndoToast();
 }
 
-// [MODIFICADO] Prioridade 1: Lógica do botão flutuante com Tooltip no modo compacto
 function showUndoToast() {
     ui.toastContainer.innerHTML = '';
-    
-    // Verifica se está no modo Widget (minimized)
     const isCompact = ui.container.classList.contains('minimized');
     
-    // Ajusta posição do container
     if (isCompact) {
         ui.toastContainer.classList.add('compact-mode');
     } else {
@@ -375,38 +326,27 @@ function showUndoToast() {
     }
 
     if (isCompact) {
-        // RENDERIZAÇÃO MODO COMPACTO (Botão Flutuante + Tooltip)
+        // Botão Flutuante
         const btn = document.createElement('button');
         btn.className = 'btn-undo-float';
-        
-        // Adiciona o atributo que ativa o CSS de tooltip existente
         btn.setAttribute('data-tooltip', 'Desfazer (Alt+Z)');
-        // Acessibilidade
-        btn.setAttribute('aria-label', 'Desfazer última limpeza');
-        
-        // Ícone de Seta de Retorno
         btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 7"/></svg>`;
-        
         btn.addEventListener('click', performUndo);
         ui.toastContainer.appendChild(btn);
-
     } else {
-        // RENDERIZAÇÃO MODO NORMAL (Toast de Texto Original)
+        // Toast Texto Normal
         const toast = document.createElement('div');
         toast.className = 'toast';
         toast.innerHTML = `<span>Texto limpo.</span><button id="undoBtn" class="btn-undo">Desfazer (Alt+Z)</button>`;
         ui.toastContainer.appendChild(toast);
-        
         document.getElementById('undoBtn').addEventListener('click', performUndo);
     }
 
     if (undoTimeout) clearTimeout(undoTimeout);
     undoTimeout = setTimeout(() => {
-        // Animação de saída
         const element = ui.toastContainer.firstElementChild;
         if (element) {
             element.style.opacity = '0';
-            // Ajusta a direção da saída baseado no modo
             element.style.transform = isCompact ? 'scale(0)' : 'translateY(20px)';
             setTimeout(() => ui.toastContainer.innerHTML = '', 300);
         }
@@ -419,6 +359,12 @@ function performUndo() {
         ui.textarea.value = tempDeletedText;
         saveContent();
         updateCharCount();
+        
+        // CORREÇÃO CRÍTICA: Rola até o fim para mostrar o texto restaurado e foca
+        ui.textarea.scrollTop = ui.textarea.scrollHeight;
+        ui.textarea.focus();
+
+        // Limpa o botão imediatamente
         ui.toastContainer.innerHTML = '';
         tempDeletedText = '';
         if (undoTimeout) clearTimeout(undoTimeout);
@@ -426,21 +372,18 @@ function performUndo() {
 }
 
 // ========================================================
-// 8. REDIMENSIONAMENTO DE JANELA (Widget Mode v1.0.4)
+// 8. REDIMENSIONAMENTO DE JANELA
 // ========================================================
 ui.toggleSizeBtn.addEventListener('click', () => {
     ui.container.classList.toggle('minimized');
     const isMin = ui.container.classList.contains('minimized');
     
-    // Troca ícones
     document.getElementById('iconMinimize').style.display = isMin ? 'none' : 'block';
     document.getElementById('iconMaximize').style.display = isMin ? 'block' : 'none';
     
-    // Dimensões Alvo (Normal vs Widget Vertical Post-it)
     const targetWidth = isMin ? 360 : 920; 
     const targetHeight = isMin ? 500 : 800; 
 
-    // Se estiver rodando como popup
     if (window.outerWidth) {
         try {
             const screenLeft = window.screen.availLeft || 0;
@@ -466,7 +409,7 @@ ui.toggleSizeBtn.addEventListener('click', () => {
 });
 
 // ========================================================
-// 9. AUXILIARES & STARTUP
+// 9. STARTUP
 // ========================================================
 function updateCharCount() {
     ui.charCount.textContent = `${ui.textarea.value.length} caracteres`;
@@ -486,7 +429,6 @@ function loadContent() {
     }
 }
 
-// Modais (Versão / Glossário)
 ui.versionBtn.addEventListener('click', () => {
     renderChangelog();
     ui.changelogModal.style.display = 'flex';
@@ -502,7 +444,6 @@ function renderChangelog() {
     `).join('');
 }
 
-// Glossário Modal
 if (ui.glossaryBtn && ui.glossaryModal) {
     ui.glossaryBtn.addEventListener('click', () => {
         glossaryManager.renderCallback(glossaryManager.getTerms()); 
@@ -516,13 +457,11 @@ if (ui.glossaryBtn && ui.glossaryModal) {
     });
 }
 
-// Inicialização
 window.addEventListener('DOMContentLoaded', () => {
     loadContent();
     ui.versionBtn.textContent = `v${currentVersion}`;
     initDeviceSelector();
 
-    // Inicializa Gerenciador de Atalhos (incluindo Alt + M)
     new HotkeyManager(ui, {
         triggerClear: () => executeSafely(() => handleClearAction()),
         triggerUndo: performUndo
