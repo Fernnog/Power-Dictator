@@ -100,7 +100,6 @@ body {
 }
 
 /* Oculta elementos desnecessários no modo widget para limpar a visão */
-/* MODIFICAÇÃO v1.0.6: .visualizer-container REMOVIDO desta lista para ser exibido */
 .container.minimized .header-title,
 .container.minimized .badge-pro,
 .container.minimized .subtitle,
@@ -816,6 +815,10 @@ kbd {
 .btn-copy.pulsing  { --pulse-color: 16, 185, 129; }  /* Emerald-500 */
 .btn-clear.pulsing { --pulse-color: 244, 63, 94; }   /* Rose-500 */
 
+/* =============================================== */
+/* 11. SMART UNDO WIDGET (v1.0.7)                  */
+/* =============================================== */
+
 /* Estilo para o Botão Flutuante de Undo (Modo Compacto) */
 .btn-undo-float {
     width: 48px;
@@ -831,9 +834,11 @@ kbd {
     cursor: pointer;
     transition: transform 0.2s, background 0.2s;
     animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    pointer-events: auto;
+    position: relative; /* Necessário para o Tooltip absoluto */
     
-    /* Necessário para o posicionamento do Tooltip */
-    position: relative; 
+    /* [CORREÇÃO v1.0.7] Z-Index brutal para garantir clique sobre qualquer camada invisível */
+    z-index: 9999; 
 }
 
 .btn-undo-float:hover {
@@ -842,8 +847,9 @@ kbd {
 }
 
 /* Ajuste de posicionamento no container de Toast quando em modo compacto */
+/* Sobe 85px para ficar acima do dock branco */
 .toast-container.compact-mode {
-    bottom: 85px; /* Eleva o botão para não cobrir o Dock */
+    bottom: 85px; 
 }
 
 @keyframes popIn {
