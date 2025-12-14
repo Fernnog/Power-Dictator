@@ -2,7 +2,7 @@
  * Constante de Versão Atual
  * Usada para exibir no badge do Header (app.html)
  */
-export const currentVersion = "1.0.6";
+export const currentVersion = "1.0.7";
 
 /**
  * Histórico de Versões
@@ -10,6 +10,15 @@ export const currentVersion = "1.0.6";
  * A ordem deve ser decrescente (mais recente primeiro).
  */
 export const changelogData = [
+    {
+        version: "1.0.7",
+        date: "13/12/2025",
+        changes: [
+            "↩️ <strong>Smart Undo (Widget):</strong> No modo compacto, o aviso de 'Texto Limpo' agora é um botão flutuante discreto que não bloqueia o dock de ferramentas.",
+            "🏷️ <strong>Tooltip Contextual:</strong> Adicionada etiqueta explicativa ao passar o mouse sobre o botão de desfazer ('Hover').",
+            "🧹 <strong>Auto-Cleanup:</strong> O botão de desfazer desaparece automaticamente assim que você inicia uma nova gravação ou copia o texto, mantendo o foco na ação atual."
+        ]
+    },
     {
         version: "1.0.6",
         date: "01/11/2023",
