@@ -815,3 +815,38 @@ kbd {
 .btn-magic.pulsing { --pulse-color: 14, 165, 233; }  /* Sky-500 */
 .btn-copy.pulsing  { --pulse-color: 16, 185, 129; }  /* Emerald-500 */
 .btn-clear.pulsing { --pulse-color: 244, 63, 94; }   /* Rose-500 */
+
+/* Estilo para o Botão Flutuante de Undo (Modo Compacto) */
+.btn-undo-float {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background-color: #1f2937; /* Dark Gray */
+    color: white;
+    border: 1px solid rgba(255,255,255,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    cursor: pointer;
+    transition: transform 0.2s, background 0.2s;
+    animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    
+    /* Necessário para o posicionamento do Tooltip */
+    position: relative; 
+}
+
+.btn-undo-float:hover {
+    background-color: #374151;
+    transform: scale(1.1);
+}
+
+/* Ajuste de posicionamento no container de Toast quando em modo compacto */
+.toast-container.compact-mode {
+    bottom: 85px; /* Eleva o botão para não cobrir o Dock */
+}
+
+@keyframes popIn {
+    from { transform: scale(0); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
