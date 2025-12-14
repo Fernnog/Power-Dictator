@@ -382,7 +382,7 @@ ui.toggleSizeBtn.addEventListener('click', () => {
     document.getElementById('iconMaximize').style.display = isMin ? 'block' : 'none';
     
     const targetWidth = isMin ? 360 : 920; 
-    const targetHeight = isMin ? 500 : 800; 
+    const targetHeight = isMin ? 500 : 350; 
 
     if (window.outerWidth) {
         try {
