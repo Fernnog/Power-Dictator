@@ -127,6 +127,11 @@ const stopVisualEffects = () => {
 };
 
 const executeSafely = async (actionCallback) => {
+    // [MODIFICADO] Prioridade 2: Auto-destruição do botão Desfazer
+    // Se o usuário iniciar qualquer outra ação, removemos a chance de desfazer para limpar a tela
+    ui.toastContainer.innerHTML = '';
+    if (undoTimeout) clearTimeout(undoTimeout);
+
     if (speechManager && speechManager.isRecording) {
         speechManager.stop();
         toggleWakeLock(false);
@@ -181,24 +186,20 @@ const updateStatus = (status) => {
     ui.statusMsg.className = 'status-bar'; // Reset texto
     
     // [v1.0.6] Lógica de Feedback Visual (Pulso)
-    // Primeiro limpamos estados anteriores que não sejam persistentes
-    // Nota: Não limpamos tudo aqui para não interferir com animações assíncronas de botões de IA
-    // Apenas gerenciamos o estado do Mic e Status Bar
     
     if (status === 'recording') {
         ui.statusMsg.textContent = "GRAVANDO";
         ui.statusMsg.classList.add('active', 'status-recording');
         ui.micBtn.classList.add('recording');
-        ui.micBtn.classList.add('pulsing'); // Efeito Visual v1.0.6
+        ui.micBtn.classList.add('pulsing'); 
     } else if (status === 'processing') {
         ui.statusMsg.textContent = "PROCESSANDO IA...";
         ui.statusMsg.classList.add('active', 'status-ai');
-        // O botão específico da IA ganha o pulso no click listener, não aqui.
     } else if (status === 'error') {
         ui.statusMsg.textContent = "ERRO / MICROFONE BLOQUEADO";
         ui.statusMsg.classList.add('active', 'status-error');
         ui.micBtn.classList.remove('recording');
-        stopVisualEffects(); // Remove pulsos em erro
+        stopVisualEffects(); 
         toggleWakeLock(false);
     } else {
         // IDLE
@@ -359,19 +360,56 @@ function handleClearAction() {
     showUndoToast();
 }
 
+// [MODIFICADO] Prioridade 1: Lógica do botão flutuante com Tooltip no modo compacto
 function showUndoToast() {
     ui.toastContainer.innerHTML = '';
-    const toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.innerHTML = `<span>Texto limpo.</span><button id="undoBtn" class="btn-undo">Desfazer (Alt+Z)</button>`;
-    ui.toastContainer.appendChild(toast);
+    
+    // Verifica se está no modo Widget (minimized)
+    const isCompact = ui.container.classList.contains('minimized');
+    
+    // Ajusta posição do container
+    if (isCompact) {
+        ui.toastContainer.classList.add('compact-mode');
+    } else {
+        ui.toastContainer.classList.remove('compact-mode');
+    }
 
-    document.getElementById('undoBtn').addEventListener('click', performUndo);
+    if (isCompact) {
+        // RENDERIZAÇÃO MODO COMPACTO (Botão Flutuante + Tooltip)
+        const btn = document.createElement('button');
+        btn.className = 'btn-undo-float';
+        
+        // Adiciona o atributo que ativa o CSS de tooltip existente
+        btn.setAttribute('data-tooltip', 'Desfazer (Alt+Z)');
+        // Acessibilidade
+        btn.setAttribute('aria-label', 'Desfazer última limpeza');
+        
+        // Ícone de Seta de Retorno
+        btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 7"/></svg>`;
+        
+        btn.addEventListener('click', performUndo);
+        ui.toastContainer.appendChild(btn);
+
+    } else {
+        // RENDERIZAÇÃO MODO NORMAL (Toast de Texto Original)
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.innerHTML = `<span>Texto limpo.</span><button id="undoBtn" class="btn-undo">Desfazer (Alt+Z)</button>`;
+        ui.toastContainer.appendChild(toast);
+        
+        document.getElementById('undoBtn').addEventListener('click', performUndo);
+    }
 
     if (undoTimeout) clearTimeout(undoTimeout);
     undoTimeout = setTimeout(() => {
-        toast.style.opacity = '0';
-        setTimeout(() => toast.remove(), 300);
+        // Animação de saída
+        const element = ui.toastContainer.firstElementChild;
+        if (element) {
+            element.style.opacity = '0';
+            // Ajusta a direção da saída baseado no modo
+            element.style.transform = isCompact ? 'scale(0)' : 'translateY(20px)';
+            setTimeout(() => ui.toastContainer.innerHTML = '', 300);
+        }
         tempDeletedText = '';
     }, 5000);
 }
