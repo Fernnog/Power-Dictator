@@ -167,7 +167,15 @@ const handleTranscriptionResult = (finalText, interimText) => {
 
 const updateStatus = (status) => {
     ui.statusMsg.className = 'status-bar';
-    if (status === 'recording') {
+    // Removemos qualquer cor injetada inline (como o amarelo)
+    ui.micBtn.style.backgroundColor = ''; 
+
+    if (status === 'starting') { // [NOVO ESTADO DE UX]
+        ui.statusMsg.textContent = "CONECTANDO...";
+        ui.statusMsg.classList.add('active', 'status-starting');
+        ui.micBtn.style.backgroundColor = '#eab308'; // Amarelo de carregando
+        ui.micBtn.classList.add('pulsing');
+    } else if (status === 'recording') {
         ui.statusMsg.textContent = "GRAVANDO";
         ui.statusMsg.classList.add('active', 'status-recording');
         ui.micBtn.classList.add('recording', 'pulsing');
@@ -229,6 +237,7 @@ ui.micBtn.addEventListener('click', () => {
         ui.toastContainer.innerHTML = ''; 
         if (undoTimeout) clearTimeout(undoTimeout);
         stopVisualEffects(); 
+        updateStatus('starting'); // [NOVO] Dispara feedback visual imediato
         speechManager.start();
         toggleWakeLock(true);
     }
