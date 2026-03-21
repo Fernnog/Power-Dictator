@@ -169,8 +169,18 @@ export class SpeechManager {
             // DEPOIS iniciamos o visualizador (que depende da flag true para rodar).
             this.startAudioVisualization(this.mediaStream);
 
-            // Por fim, iniciamos o reconhecimento de texto.
-            this.recognition.start();
+            // Por fim, iniciamos o reconhecimento de texto com proteção contra Race Condition
+            try {
+                this.recognition.start();
+            } catch (recognitionErr) {
+                // Se o erro for apenas informando que já começou, nós o ignoramos pacificamente.
+                if (recognitionErr.name === 'InvalidStateError') {
+                    console.warn("Speech Manager: A API de voz já estava ativa. Ignorando dupla inicialização.");
+                } else {
+                    // Se for um erro diferente e real, repassamos para o catch principal.
+                    throw recognitionErr; 
+                }
+            }
 
         } catch (err) {
             console.error("Erro CRÍTICO ao iniciar áudio:", err);
