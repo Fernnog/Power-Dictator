@@ -3,7 +3,9 @@ export const CONFIG = {
         TEXT: 'ditado_backup_text',
         MIC: 'ditado_pref_mic',
         API: 'ditado_digital_gemini_key',
-        GLOSSARY: 'dd_glossary'
+        GLOSSARY: 'dd_glossary',
+        HF_TOKEN: 'dd_hf_token',
+        ENGINE: 'dd_engine_pref'
     },
     AUDIO: {
         HIGHPASS_FREQ: 85,
