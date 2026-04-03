@@ -538,6 +538,65 @@ textarea {
 .container.minimized .btn-action span { display: none; }
 
 /* =============================================== */
+/* --- NOVO: ESTILOS DA CHAVE SELETORA (ENGINE) -- */
+/* =============================================== */
+.engine-selector-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #fff;
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: var(--btn-radius);
+}
+
+.engine-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-main);
+    min-width: 60px;
+}
+
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .4s;
+}
+
+.toggle-switch input:checked + .slider { background-color: var(--c-mic); }
+.toggle-switch input:checked + .slider:before { transform: translateX(16px); }
+.slider.round { border-radius: 20px; }
+.slider.round:before { border-radius: 50%; }
+
+.container.minimized .engine-selector-container { display: none; } /* Oculta no widget para economizar espaço */
+
+/* =============================================== */
 /* 7. TOOLTIPS                                    */
 /* =============================================== */
 [data-tooltip]:hover::after {
@@ -727,7 +786,7 @@ kbd {
     margin-bottom: 8px;
     border-radius: 8px;
     font-size: 0.9rem;
-    border: 1px solid transparent;
+    border: 1px transparent;
 }
 .glossary-item:hover {
     border-color: #e5e7eb;
