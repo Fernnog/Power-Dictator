@@ -64,6 +64,15 @@
         <!-- Dock de Controles -->
         <div class="control-dock">
             
+            <!-- NOVO: Chave Seletora de Motor de Voz -->
+            <div class="engine-selector-container" data-tooltip="Alternar Motor de Voz">
+                <label class="toggle-switch">
+                    <input type="checkbox" id="engineToggle">
+                    <span class="slider round"></span>
+                </label>
+                <span class="engine-label" id="engineLabel">Nativo</span>
+            </div>
+
             <!-- Seletor de Microfone -->
             <div class="device-selector-container" data-tooltip="Fonte de Áudio">
                 <select id="audioSource" class="device-select">
