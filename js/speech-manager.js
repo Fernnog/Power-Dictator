@@ -1,12 +1,18 @@
 import { CONFIG } from './config.js';
+import { hfService } from './hf-service.js';
 
 export class SpeechManager {
     constructor(visualizerCanvasId, onResultCallback, onStatusChange) {
         this.isRecording = false;
+        this.useWhisper = false; // [NOVO] Flag de controle do motor
         this.recognition = null;
         this.audioContext = null;
         this.mediaStream = null;
         this.analyser = null;
+        
+        // Atributos do MediaRecorder (Whisper)
+        this.mediaRecorder = null;
+        this.audioChunks = [];
         
         // Referência ao Canvas com proteção contra nulo
         this.canvas = document.getElementById(visualizerCanvasId);
@@ -38,19 +44,21 @@ export class SpeechManager {
         
         this.recognition.onend = () => {
             // Reinicia automaticamente se ainda deveria estar gravando (loop de segurança)
-            if (this.isRecording) {
+            if (this.isRecording && !this.useWhisper) {
                 try { 
                     this.recognition.start(); 
                 } catch(e) {
                     // Ignora erros de restart muito rápido
                 }
-            } else {
+            } else if (!this.useWhisper) {
                 this.onStatus('idle');
                 this.stopAudioVisualization();
             }
         };
 
         this.recognition.onresult = (event) => {
+            if (this.useWhisper) return; // Ignora se o motor Whisper estiver ativo
+
             let interimTranscript = '';
             let finalTranscript = '';
 
@@ -93,20 +101,16 @@ export class SpeechManager {
      */
     async getAudioDevices() {
         try {
-            // 1. Tenta listar
             let devices = await navigator.mediaDevices.enumerateDevices();
             let audioDevices = devices.filter(d => d.kind === 'audioinput');
 
-            // 2. Verifica se os labels estão vazios (Proteção de Privacidade do Browser)
             const hasLabels = audioDevices.some(d => d.label !== "");
             
             if (!hasLabels && audioDevices.length > 0) {
                 try {
-                    // 3. Trigger Relâmpago: Pede permissão rápida para desbloquear nomes
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                     stream.getTracks().forEach(track => track.stop());
                     
-                    // 4. Lista novamente com permissão
                     devices = await navigator.mediaDevices.enumerateDevices();
                     audioDevices = devices.filter(d => d.kind === 'audioinput');
                 } catch (permErr) {
@@ -130,7 +134,6 @@ export class SpeechManager {
         if (this.isRecording) return;
         
         try {
-            // 1. Inicia/Resume Contexto de Áudio (Crucial para visualizador)
             if (!this.audioContext) {
                 this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
             }
@@ -138,18 +141,14 @@ export class SpeechManager {
                 await this.audioContext.resume();
             }
 
-            // 2. Configura Stream de Áudio com FALLBACK e CONFIGURAÇÃO CENTRALIZADA (v1.0.6)
             let stream;
             
             try {
                 const constraints = {
                     audio: {
-                        // Se houver ID específico selecionado, usa 'exact', senão undefined
                         deviceId: this.selectedDeviceId && this.selectedDeviceId !== 'default' 
                             ? { exact: this.selectedDeviceId } 
                             : undefined,
-                        
-                        // Injeta configurações do config.js (Mono, 48kHz, DSP)
                         ...CONFIG.AUDIO.CONSTRAINTS
                     }
                 };
@@ -161,24 +160,44 @@ export class SpeechManager {
             }
             
             this.mediaStream = stream;
-
-            // --- CORREÇÃO CRÍTICA AQUI ---
-            // Primeiro definimos que ESTAMOS gravando.
             this.isRecording = true; 
             
-            // DEPOIS iniciamos o visualizador (que depende da flag true para rodar).
             this.startAudioVisualization(this.mediaStream);
 
-            // Por fim, iniciamos o reconhecimento de texto com proteção contra Race Condition
-            try {
-                this.recognition.start();
-            } catch (recognitionErr) {
-                // Se o erro for apenas informando que já começou, nós o ignoramos pacificamente.
-                if (recognitionErr.name === 'InvalidStateError') {
-                    console.warn("Speech Manager: A API de voz já estava ativa. Ignorando dupla inicialização.");
-                } else {
-                    // Se for um erro diferente e real, repassamos para o catch principal.
-                    throw recognitionErr; 
+            // [NOVO] Lógica de Ramificação do Motor
+            if (this.useWhisper) {
+                this.audioChunks = [];
+                this.mediaRecorder = new MediaRecorder(this.mediaStream, { mimeType: 'audio/webm' });
+                
+                this.mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) this.audioChunks.push(event.data);
+                };
+
+                this.mediaRecorder.onstop = async () => {
+                    this.onStatus('processing'); 
+                    const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+                    
+                    try {
+                        const text = await hfService.transcribe(audioBlob);
+                        if (text) this.onResult(text, ''); 
+                        this.onStatus('idle');
+                    } catch (error) {
+                        this.onStatus('error');
+                        setTimeout(() => alert("Erro na transcrição Whisper: " + error.message), 100);
+                    }
+                };
+
+                this.mediaRecorder.start();
+                this.onStatus('recording');
+            } else {
+                try {
+                    this.recognition.start();
+                } catch (recognitionErr) {
+                    if (recognitionErr.name === 'InvalidStateError') {
+                        console.warn("Speech Manager: A API de voz já estava ativa. Ignorando dupla inicialização.");
+                    } else {
+                        throw recognitionErr; 
+                    }
                 }
             }
 
@@ -192,17 +211,20 @@ export class SpeechManager {
 
     stop() {
         this.isRecording = false;
-        if (this.recognition) {
+        
+        // [NOVO] Desliga o motor apropriado
+        if (this.useWhisper && this.mediaRecorder && this.mediaRecorder.state !== "inactive") {
+            this.mediaRecorder.stop();
+        } else if (this.recognition) {
             try { this.recognition.stop(); } catch(e) {}
         }
+        
         this.stopAudioVisualization();
     }
 
-    // --- Lógica do Visualizador (Osciloscópio OTIMIZADO) ---
     async startAudioVisualization(stream) {
         if (!this.canvasCtx) return;
 
-        // Garante robustez do AudioContext
         if (!this.audioContext) {
              this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
         }
@@ -210,7 +232,6 @@ export class SpeechManager {
             await this.audioContext.resume();
         }
 
-        // Configuração do Analisador
         const source = this.audioContext.createMediaStreamSource(stream);
         this.analyser = this.audioContext.createAnalyser();
         this.analyser.fftSize = 2048; 
@@ -219,27 +240,23 @@ export class SpeechManager {
         const bufferLength = this.analyser.frequencyBinCount;
         const dataArray = new Uint8Array(bufferLength);
 
-        // Variáveis para otimização (evita Layout Thrashing)
         let isSignalStrong = false;
         const feedbackTarget = document.querySelector('.editor-area'); 
         const canvasTarget = this.canvas;
 
         const draw = () => {
-            // Se isRecording for false, o loop morre aqui.
             if (!this.isRecording) return;
             
             requestAnimationFrame(draw);
 
             this.analyser.getByteTimeDomainData(dataArray);
 
-            // Limpa Canvas
             this.canvasCtx.fillStyle = '#f9fafb'; 
             this.canvasCtx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
             const centerY = this.canvas.height / 2;
-            const threshold = this.canvas.height * 0.15; // 15% de sensibilidade
+            const threshold = this.canvas.height * 0.15; 
 
-            // 1. Desenha Linha de Threshold (Pontilhada Vermelha)
             this.canvasCtx.beginPath();
             this.canvasCtx.setLineDash([4, 4]); 
             this.canvasCtx.strokeStyle = 'rgba(239, 68, 68, 0.3)';
@@ -251,7 +268,6 @@ export class SpeechManager {
             this.canvasCtx.lineTo(this.canvas.width, centerY + threshold);
             this.canvasCtx.stroke();
 
-            // 2. Desenha Onda de Áudio
             this.canvasCtx.setLineDash([]); 
             this.canvasCtx.lineWidth = 2;
             this.canvasCtx.strokeStyle = '#4f46e5'; 
@@ -277,7 +293,6 @@ export class SpeechManager {
             this.canvasCtx.lineTo(this.canvas.width, centerY);
             this.canvasCtx.stroke();
             
-            // 3. Feedback Visual OTIMIZADO
             const currentSignalStrong = maxAmplitude > threshold;
             
             if (currentSignalStrong !== isSignalStrong) {
@@ -302,7 +317,6 @@ export class SpeechManager {
             this.mediaStream = null;
         }
         
-        // Remove feedback visual ao parar
         if (this.canvas) this.canvas.classList.remove('audio-detected');
         const feedbackTarget = document.querySelector('.editor-area');
         if (feedbackTarget) feedbackTarget.classList.remove('audio-detected');
