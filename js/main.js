@@ -20,6 +20,10 @@ const ui = {
     audioSource: document.getElementById('audioSource'),
     fileInput: document.getElementById('fileInput'),
     
+    // [NOVO] Controle de Motor
+    engineToggle: document.getElementById('engineToggle'),
+    engineLabel: document.getElementById('engineLabel'),
+    
     // Botões de Ação
     btnUpload: document.querySelector('.btn-upload'),
     btnAiFix: document.getElementById('aiFixBtn'),
@@ -70,7 +74,6 @@ const toggleWakeLock = async (shouldLock) => {
     }
 };
 
-// Recupera o lock se a aba perder e recuperar visibilidade
 document.addEventListener('visibilitychange', async () => {
     if (wakeLock !== null && document.visibilityState === 'visible') {
         try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e){}
@@ -121,7 +124,6 @@ const stopVisualEffects = () => {
 };
 
 const executeSafely = async (actionCallback) => {
-    // AUTO-CLEANUP: Limpa botão undo ao iniciar outra ação
     ui.toastContainer.innerHTML = ''; 
     if (undoTimeout) clearTimeout(undoTimeout);
 
@@ -167,13 +169,12 @@ const handleTranscriptionResult = (finalText, interimText) => {
 
 const updateStatus = (status) => {
     ui.statusMsg.className = 'status-bar';
-    // Removemos qualquer cor injetada inline (como o amarelo)
     ui.micBtn.style.backgroundColor = ''; 
 
-    if (status === 'starting') { // [NOVO ESTADO DE UX]
+    if (status === 'starting') {
         ui.statusMsg.textContent = "CONECTANDO...";
         ui.statusMsg.classList.add('active', 'status-starting');
-        ui.micBtn.style.backgroundColor = '#eab308'; // Amarelo de carregando
+        ui.micBtn.style.backgroundColor = '#eab308'; 
         ui.micBtn.classList.add('pulsing');
     } else if (status === 'recording') {
         ui.statusMsg.textContent = "GRAVANDO";
@@ -183,7 +184,7 @@ const updateStatus = (status) => {
         ui.statusMsg.textContent = "PROCESSANDO IA...";
         ui.statusMsg.classList.add('active', 'status-ai');
     } else if (status === 'error') {
-        ui.statusMsg.textContent = "ERRO / MICROFONE BLOQUEADO";
+        ui.statusMsg.textContent = "ERRO / BLOQUEADO";
         ui.statusMsg.classList.add('active', 'status-error');
         ui.micBtn.classList.remove('recording');
         stopVisualEffects(); 
@@ -237,11 +238,20 @@ ui.micBtn.addEventListener('click', () => {
         ui.toastContainer.innerHTML = ''; 
         if (undoTimeout) clearTimeout(undoTimeout);
         stopVisualEffects(); 
-        updateStatus('starting'); // [NOVO] Dispara feedback visual imediato
+        updateStatus('starting'); 
         speechManager.start();
         toggleWakeLock(true);
     }
 });
+
+if (ui.engineToggle) {
+    ui.engineToggle.addEventListener('change', (e) => {
+        const isChecked = e.target.checked;
+        localStorage.setItem('dd_engine_pref', isChecked ? 'whisper' : 'native');
+        if (ui.engineLabel) ui.engineLabel.textContent = isChecked ? 'Whisper AI' : 'Nativo';
+        speechManager.useWhisper = isChecked;
+    });
+}
 
 ui.fileInput.addEventListener('change', () => {
     executeSafely(() => {
@@ -335,7 +345,6 @@ function showUndoToast() {
     }
 
     if (isCompact) {
-        // Botão Flutuante
         const btn = document.createElement('button');
         btn.className = 'btn-undo-float';
         btn.setAttribute('data-tooltip', 'Desfazer (Alt+Z)');
@@ -343,7 +352,6 @@ function showUndoToast() {
         btn.addEventListener('click', performUndo);
         ui.toastContainer.appendChild(btn);
     } else {
-        // Toast Texto Normal
         const toast = document.createElement('div');
         toast.className = 'toast';
         toast.innerHTML = `<span>Texto limpo.</span><button id="undoBtn" class="btn-undo">Desfazer (Alt+Z)</button>`;
@@ -369,11 +377,9 @@ function performUndo() {
         saveContent();
         updateCharCount();
         
-        // CORREÇÃO CRÍTICA: Rola até o fim para mostrar o texto restaurado e foca
         ui.textarea.scrollTop = ui.textarea.scrollHeight;
         ui.textarea.focus();
 
-        // Limpa o botão imediatamente
         ui.toastContainer.innerHTML = '';
         tempDeletedText = '';
         if (undoTimeout) clearTimeout(undoTimeout);
@@ -471,16 +477,23 @@ window.addEventListener('DOMContentLoaded', () => {
     ui.versionBtn.textContent = `v${currentVersion}`;
     initDeviceSelector();
 
+    // [NOVO] Inicializa estado da Chave Seletora
+    if (ui.engineToggle) {
+        const savedEngine = localStorage.getItem('dd_engine_pref') || 'native';
+        const isWhisper = savedEngine === 'whisper';
+        ui.engineToggle.checked = isWhisper;
+        if (ui.engineLabel) ui.engineLabel.textContent = isWhisper ? 'Whisper AI' : 'Nativo';
+        if (speechManager) speechManager.useWhisper = isWhisper;
+    }
+
     new HotkeyManager(ui, {
         triggerClear: () => executeSafely(() => handleClearAction()),
         triggerUndo: performUndo
     });
-// [ENGENHARIA] Auto-Detect Compact Mode via URL Parameter
+
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('mode') === 'compact') {
-        // Aguarda um ciclo de renderização para garantir que o CSS carregou
         setTimeout(() => {
-            // Se ainda não estiver minimizado, aciona o toggle
             if (!ui.container.classList.contains('minimized')) {
                 ui.toggleSizeBtn.click();
             }
