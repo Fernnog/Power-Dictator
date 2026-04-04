@@ -2,7 +2,6 @@ import { CONFIG } from './config.js';
 
 class HuggingFaceService {
     constructor() {
-        // Usando a versão small que carrega muito mais rápido em contas gratuitas
         this.modelUrl = 'https://api-inference.huggingface.co/models/openai/whisper-small';
         this.storageKey = 'dd_hf_token'; 
     }
@@ -10,7 +9,7 @@ class HuggingFaceService {
     getToken() {
         let token = localStorage.getItem(this.storageKey);
         if (!token) {
-            token = prompt("🔑 Configuração Whisper:\n\nInsira seu Access Token 'Fine-grained' do Hugging Face (com permissão de Inference API).\n(Inicie com 'hf_')");
+            token = prompt("🔑 Configuração Whisper:\n\nInsira seu Access Token 'Fine-grained' do Hugging Face.\n(Inicie com 'hf_')");
             if (token && token.startsWith('hf_')) {
                 localStorage.setItem(this.storageKey, token);
             } else {
@@ -26,20 +25,19 @@ class HuggingFaceService {
         if (!token) throw new Error("Token ausente");
 
         try {
+            // Requisição simplificada: Deixamos o navegador inferir o Content-Type nativamente
+            // Isso evita que o Hugging Face bloqueie regras estritas no Preflight (OPTIONS)
             const response = await fetch(this.modelUrl, {
                 headers: { 
-                    "Authorization": `Bearer ${token}`,
-                    // O tipo do áudio é passado explicitamente para ajudar o modelo a decodificar o Blob
-                    "Content-Type": audioBlob.type || "audio/webm" 
+                    "Authorization": `Bearer ${token}`
                 },
                 method: "POST",
                 body: audioBlob,
             });
 
-            // Se o servidor devolver 503, o modelo está acordando (Cold Start)
             if (response.status === 503) {
                 const data = await response.json();
-                throw new Error(`Modelo acordando. Tempo estimado: ${Math.round(data.estimated_time || 20)} segundos. Tente gravar novamente em instantes.`);
+                throw new Error(`Modelo acordando. Tempo estimado: ${Math.round(data.estimated_time || 20)} segundos. Aguarde um instante e grave novamente.`);
             }
 
             const result = await response.json();
@@ -50,9 +48,8 @@ class HuggingFaceService {
         } catch (error) {
             console.error("HF API Error Detalhado:", error);
             
-            // Tratamento atualizado para o falso positivo de CORS / Falha de Rede
             if (error.message === 'Failed to fetch' || error.name === 'TypeError') {
-                throw new Error("Conexão bloqueada (CORS). Verifique se o seu Token possui a permissão 'Inference API' ativa nas configurações do Hugging Face. Se sim, o modelo pode estar acordando. Aguarde 20s e tente novamente.");
+                throw new Error("Erro de CORS ou Modelo Dormindo. A Hugging Face rejeitou a conexão. Certifique-se de que inseriu o Token Novo (Fine-grained) e aguarde 20s para o modelo acordar.");
             }
             
             throw error;
