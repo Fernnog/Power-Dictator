@@ -42,7 +42,7 @@ body {
 .container {
     background-color: var(--bg-card);
     width: 100%;
-    max-width: 950px; 
+    max-width: 1050px; 
     height: 90vh;
     border-radius: var(--radius);
     box-shadow: var(--shadow-soft);
