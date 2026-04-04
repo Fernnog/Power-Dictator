@@ -2,7 +2,7 @@ import { CONFIG } from './config.js';
 
 class HuggingFaceService {
     constructor() {
-        this.modelUrl = 'https://api-inference.huggingface.co/models/openai/whisper-large-v3';
+        this.modelUrl = 'https://api-inference.huggingface.co/models/openai/whisper-small';
         this.storageKey = 'dd_hf_token'; // Usado para manter o token na máquina do usuário
     }
 
