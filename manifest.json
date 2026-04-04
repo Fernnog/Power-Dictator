@@ -1,0 +1,22 @@
+{
+  "name": "Ditado Digital Pro",
+  "short_name": "Ditado Pro",
+  "description": "Sua voz textualizada com inteligência artificial e persistência de dados.",
+  "scope": "/Power-Dictator/", 
+  "start_url": "/Power-Dictator/app.html?mode=compact",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
