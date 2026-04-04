@@ -1,17 +1,18 @@
 import { CONFIG } from './config.js';
 
-class HuggingFaceService {
+class WhisperService {
     constructor() {
-        // A URL base original do modelo
-        this.modelUrl = 'https://api-inference.huggingface.co/models/openai/whisper-small';
-        this.storageKey = 'dd_hf_token'; 
+        // Mudamos o motor para a Groq: muito mais rápido, suporta CORS nativamente e usa Whisper V3
+        this.modelUrl = 'https://api.groq.com/openai/v1/audio/transcriptions';
+        this.storageKey = 'dd_groq_token'; 
     }
 
     getToken() {
         let token = localStorage.getItem(this.storageKey);
         if (!token) {
-            token = prompt("🔑 Configuração Whisper:\n\nInsira seu Access Token 'Fine-grained' do Hugging Face.\n(Inicie com 'hf_')");
-            if (token && token.startsWith('hf_')) {
+            token = prompt("🚀 Atualização de Motor (Groq):\n\nPara resolver os bloqueios de rede, migramos para a Groq.\n\nInsira sua API Key da Groq (Inicia com 'gsk_'):\n(Obtenha sua chave gratuitamente em: console.groq.com/keys)");
+            
+            if (token && token.startsWith('gsk_')) {
                 localStorage.setItem(this.storageKey, token);
             } else {
                 alert("Token inválido. Ação cancelada.");
@@ -25,48 +26,47 @@ class HuggingFaceService {
         const token = this.getToken();
         if (!token) throw new Error("Token ausente");
 
-        // --- SOLUÇÃO DE CORS (PROXY) ---
-        // Envolvemos a URL original no corsproxy.io para o navegador não bloquear a requisição
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(this.modelUrl)}`;
+        // A API da Groq (compatível com padrão OpenAI) exige que o áudio seja enviado como um formulário (FormData)
+        const formData = new FormData();
+        // O backend precisa de um nome de arquivo virtual com extensão para identificar o formato
+        formData.append("file", audioBlob, "audio.webm"); 
+        formData.append("model", "whisper-large-v3"); // Modelo top de linha atual
+        formData.append("language", "pt"); // Força o idioma para aumentar a precisão do reconhecimento
 
         try {
-            // Fazemos a chamada para o Proxy, que repassará para a Hugging Face
-            const response = await fetch(proxyUrl, {
+            // Chamada direta e limpa, sem proxies!
+            const response = await fetch(this.modelUrl, {
+                method: "POST",
                 headers: { 
                     "Authorization": `Bearer ${token}`
+                    // IMPORTANTE: Não definimos o Content-Type aqui. 
+                    // O navegador faz isso automaticamente e injeta o "boundary" correto do FormData.
                 },
-                method: "POST",
-                body: audioBlob,
+                body: formData,
             });
 
-            // Tratamento específico: Modelo "dormindo" (Cold Start)
-            if (response.status === 503) {
-                const data = await response.json();
-                throw new Error(`Modelo acordando. Tempo estimado: ${Math.round(data.estimated_time || 20)} segundos. Aguarde um instante e grave novamente.`);
-            }
-
-            // Captura erros de status HTTP antes do parse final para não quebrar a aplicação
+            // Tratamento de erros de autenticação ou limites da API
             if (!response.ok) {
                 const errData = await response.json().catch(() => ({}));
-                throw new Error(errData.error || `Erro de Comunicação HTTP: ${response.status}`);
+                // Se a chave for inválida (401), apagamos do storage para o sistema pedir de novo
+                if (response.status === 401) {
+                    localStorage.removeItem(this.storageKey);
+                }
+                throw new Error(errData.error?.message || `Erro do Servidor Groq: ${response.status}`);
             }
 
             const result = await response.json();
             
-            if (result.error) throw new Error(result.error);
+            if (!result.text) throw new Error("A API processou, mas não retornou texto.");
             return result.text;
 
         } catch (error) {
-            console.error("HF API Error Detalhado:", error);
-            
-            // Tratamento de erro amigável para problemas de rede/proxy
-            if (error.message.includes('Failed to fetch') || error.name === 'TypeError') {
-                throw new Error("Erro de CORS ou conexão. O Proxy ou a API rejeitou a comunicação. Verifique se o seu Token possui permissão de 'Inference'.");
-            }
-            
-            throw error;
+            console.error("Whisper API Error:", error);
+            throw new Error(`Falha no reconhecimento: ${error.message}`);
         }
     }
 }
 
-export const hfService = new HuggingFaceService();
+// Mantemos o nome da exportação idêntico ao antigo. 
+// Assim, o speech-manager.js nem percebe que trocamos o motor por baixo dos panos!
+export const hfService = new WhisperService();
