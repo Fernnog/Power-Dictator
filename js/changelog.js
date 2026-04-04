@@ -2,31 +2,23 @@
  * Constante de Versão Atual
  * Usada para exibir no badge do Header (app.html)
  */
-export const currentVersion = "1.0.9";
+export const currentVersion = "1.0.8";
 
 /**
  * Histórico de Versões
  * Array de objetos contendo versão, data e lista de mudanças.
  * A ordem deve ser decrescente (mais recente primeiro).
  */
-export const changelog = [
-    {
-        version: "1.0.9",
-        date: "04/04/2026",
-        changes: [
-            "🚀 Migração para Groq Cloud: Transcrição via Whisper Large V3 com performance ultrarrápida.",
-            "📐 Layout Adaptativo: Janela expandida para 1080px, garantindo visibilidade total dos controles.",
-            "🤖 Automação: Versionamento dinâmico alimentado exclusivamente por este arquivo."
-        ]
-    },
+export const changelogData = [
     {
         version: "1.0.8",
-        date: "02/04/2026",
+        date: "03/04/2026",
         changes: [
-            "🔧 Ajustes no Speech Manager para melhor captura de áudio.",
-            "🎨 Refinamentos visuais no modo compacto."
+            "🎙️ <strong>Duplo Motor de Voz:</strong> Nova chave seletora para alternar entre o motor Nativo (tempo real, ideal para rascunhos) e Whisper AI (alta precisão, ideal para documentos).",
+            "🔑 <strong>Integração Hugging Face (BYOK):</strong> Configuração segura de token local (Bring Your Own Key) para uso gratuito da API de inferência do modelo Whisper.",
+            "📦 <strong>Captura Otimizada:</strong> Implementação de captura de áudio via `MediaRecorder` e envio de fragmentos em blocos (Blobs) para suportar o motor de IA."
         ]
-   },
+    },
     {
         version: "1.0.7",
         date: "13/12/2025",
