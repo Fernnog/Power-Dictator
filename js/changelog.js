@@ -15,7 +15,7 @@ export const changelogData = [
         date: "03/04/2026",
         changes: [
             "🎙️ <strong>Duplo Motor de Voz:</strong> Nova chave seletora para alternar entre o motor Nativo (tempo real, ideal para rascunhos) e Whisper AI (alta precisão, ideal para documentos).",
-            "🔑 <strong>Integração Hugging Face (BYOK):</strong> Configuração segura de token local (Bring Your Own Key) para uso gratuito da API de inferência do modelo Whisper.",
+            "🔑 <strong>Integração GROQ:</strong> Configuração segura de token local (Bring Your Own Key) para uso gratuito da API de inferência do modelo Whisper.",
             "📦 <strong>Captura Otimizada:</strong> Implementação de captura de áudio via `MediaRecorder` e envio de fragmentos em blocos (Blobs) para suportar o motor de IA."
         ]
     },
