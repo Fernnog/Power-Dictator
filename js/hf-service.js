@@ -2,6 +2,7 @@ import { CONFIG } from './config.js';
 
 class HuggingFaceService {
     constructor() {
+        // A URL base original do modelo
         this.modelUrl = 'https://api-inference.huggingface.co/models/openai/whisper-small';
         this.storageKey = 'dd_hf_token'; 
     }
@@ -24,10 +25,13 @@ class HuggingFaceService {
         const token = this.getToken();
         if (!token) throw new Error("Token ausente");
 
+        // --- SOLUÇÃO DE CORS (PROXY) ---
+        // Envolvemos a URL original no corsproxy.io para o navegador não bloquear a requisição
+        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(this.modelUrl)}`;
+
         try {
-            // Requisição simplificada: Deixamos o navegador inferir o Content-Type nativamente
-            // Isso evita que o Hugging Face bloqueie regras estritas no Preflight (OPTIONS)
-            const response = await fetch(this.modelUrl, {
+            // Fazemos a chamada para o Proxy, que repassará para a Hugging Face
+            const response = await fetch(proxyUrl, {
                 headers: { 
                     "Authorization": `Bearer ${token}`
                 },
@@ -35,9 +39,16 @@ class HuggingFaceService {
                 body: audioBlob,
             });
 
+            // Tratamento específico: Modelo "dormindo" (Cold Start)
             if (response.status === 503) {
                 const data = await response.json();
                 throw new Error(`Modelo acordando. Tempo estimado: ${Math.round(data.estimated_time || 20)} segundos. Aguarde um instante e grave novamente.`);
+            }
+
+            // Captura erros de status HTTP antes do parse final para não quebrar a aplicação
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.error || `Erro de Comunicação HTTP: ${response.status}`);
             }
 
             const result = await response.json();
@@ -48,8 +59,9 @@ class HuggingFaceService {
         } catch (error) {
             console.error("HF API Error Detalhado:", error);
             
-            if (error.message === 'Failed to fetch' || error.name === 'TypeError') {
-                throw new Error("Erro de CORS ou Modelo Dormindo. A Hugging Face rejeitou a conexão. Certifique-se de que inseriu o Token Novo (Fine-grained) e aguarde 20s para o modelo acordar.");
+            // Tratamento de erro amigável para problemas de rede/proxy
+            if (error.message.includes('Failed to fetch') || error.name === 'TypeError') {
+                throw new Error("Erro de CORS ou conexão. O Proxy ou a API rejeitou a comunicação. Verifique se o seu Token possui permissão de 'Inference'.");
             }
             
             throw error;
