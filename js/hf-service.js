@@ -10,7 +10,7 @@ class HuggingFaceService {
     getToken() {
         let token = localStorage.getItem(this.storageKey);
         if (!token) {
-            token = prompt("🔑 Configuração Whisper:\n\nInsira seu Access Token do Hugging Face.\n(Inicie com 'hf_')");
+            token = prompt("🔑 Configuração Whisper:\n\nInsira seu Access Token 'Fine-grained' do Hugging Face (com permissão de Inference API).\n(Inicie com 'hf_')");
             if (token && token.startsWith('hf_')) {
                 localStorage.setItem(this.storageKey, token);
             } else {
@@ -28,9 +28,9 @@ class HuggingFaceService {
         try {
             const response = await fetch(this.modelUrl, {
                 headers: { 
-                    Authorization: `Bearer ${token}`
-                    // Nota do Arquiteto: NÃO forçamos o Content-Type aqui. 
-                    // O navegador infere automaticamente pelo Blob, evitando conflitos de preflight.
+                    "Authorization": `Bearer ${token}`,
+                    // O tipo do áudio é passado explicitamente para ajudar o modelo a decodificar o Blob
+                    "Content-Type": audioBlob.type || "audio/webm" 
                 },
                 method: "POST",
                 body: audioBlob,
@@ -50,13 +50,14 @@ class HuggingFaceService {
         } catch (error) {
             console.error("HF API Error Detalhado:", error);
             
-            // Tratamento específico para o falso positivo de CORS / Falha de Rede
+            // Tratamento atualizado para o falso positivo de CORS / Falha de Rede
             if (error.message === 'Failed to fetch' || error.name === 'TypeError') {
-                throw new Error("Conexão bloqueada (CORS/Rede). O modelo pode estar adormecido ou o token é inválido. Aguarde 20 segundos e tente de novo. Se persistir, recrie seu Token (Modo 'Read').");
+                throw new Error("Conexão bloqueada (CORS). Verifique se o seu Token possui a permissão 'Inference API' ativa nas configurações do Hugging Face. Se sim, o modelo pode estar acordando. Aguarde 20s e tente novamente.");
             }
             
             throw error;
         }
     }
 }
+
 export const hfService = new HuggingFaceService();
