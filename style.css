@@ -440,6 +440,8 @@ textarea {
     gap: 10px;
     padding: 0.5rem;
     transition: all 0.3s ease;
+    flex-wrap: wrap;
+    justify-content: center;
 }
 
 /* --- Ajustes DOCK no Modo Compacto --- */
