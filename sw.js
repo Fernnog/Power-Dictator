@@ -2,7 +2,8 @@
 // Como sugeri no plano anterior, 'ditado-digital-v1.0.9' está seguro.
 // Mas para eliminar 100% de risco, vamos prefixar com o nome do repositório:
 
-const CACHE_NAME = 'power-dictator-cache-v1.0.9';
+// Atualize a versão do cache para forçar os navegadores a baixarem as novidades
+const CACHE_NAME = 'power-dictator-cache-v1.1.0';
 
 // Na lista de arquivos, garanta o uso de caminhos relativos explícitos
 const ASSETS_TO_CACHE = [
@@ -11,6 +12,7 @@ const ASSETS_TO_CACHE = [
   './style.css',
   './js/main.js',
   './js/config.js',
+  './js/llm-service.js', // <-- Atualizado: antigo gemini-service.js
   './js/hf-service.js',
   './js/speech-manager.js',
   './js/hotkeys.js',
