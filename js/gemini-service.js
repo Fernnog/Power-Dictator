@@ -11,8 +11,8 @@ class LlamaTextService {
         this.apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
         // Reutilizamos a mesma chave do Whisper para simplificar a UX
         this.storageKey = 'dd_groq_token'; 
-        // Llama 3 8B é extremamente rápido, gratuito e excelente para gramática
-        this.model = 'llama3-8b-8192'; 
+                // Atualizado para o modelo Llama 3.1 mais recente (o anterior foi descontinuado pela Groq)
+        this.model = 'llama-3.1-8b-instant'; 
     }
 
     getToken() {
