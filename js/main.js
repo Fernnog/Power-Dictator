@@ -1,5 +1,5 @@
 import { SpeechManager } from './speech-manager.js';
-import { aiService } from './gemini-service.js';
+import { aiService } from './llm-service.js'; // <- ATUALIZADO: Importação do novo módulo
 import { changelogData, currentVersion } from './changelog.js';
 import Glossary from './glossary.js';
 import { CONFIG } from './config.js';
@@ -273,7 +273,6 @@ ui.btnAiFix.addEventListener('click', () => {
             saveContent();
             updateStatus('success');
         } catch (error) {
-            // Ajuste na mensagem para refletir a nova IA (Llama/Groq)
             alert("Erro na IA (Llama/Groq): " + error.message);
             updateStatus('error');
         } finally {
@@ -283,6 +282,7 @@ ui.btnAiFix.addEventListener('click', () => {
     });
 });
 
+// <- ATUALIZADO: Nova lógica unificada para o botão Jurídico
 ui.btnAiLegal.addEventListener('click', () => {
     const text = ui.textarea.value.trim();
     if (!text) return alert("Digite ou dite algo primeiro.");
@@ -291,14 +291,14 @@ ui.btnAiLegal.addEventListener('click', () => {
         stopVisualEffects();
         ui.btnAiLegal.classList.add('pulsing'); 
         updateStatus('processing');
+        
         try {
             const result = await aiService.convertToLegal(text);
             ui.textarea.value = result;
             saveContent();
             updateStatus('success');
         } catch (error) {
-            // Ajuste na mensagem para refletir a nova IA (Llama/Groq)
-            alert("Erro na IA (Llama/Groq): " + error.message);
+            alert("Erro na transcrição Jurídica (Groq): " + error.message);
             updateStatus('error');
         } finally {
             ui.btnAiLegal.classList.remove('pulsing'); 
