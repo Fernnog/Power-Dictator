@@ -1,6 +1,6 @@
 /**
  * LlamaTextService - Arquiteto de Produto Front-end
- * Versão: 1.0.9 (Migração Groq/LLaMA - Revisão Definitiva)
+ * Versão: 1.1.0 (Refatoração Arquitetural e Padronização de Motor)
  * Finalidade: Processamento de texto via LLM com saída estrita.
  */
 
@@ -79,8 +79,12 @@ class LlamaTextService {
     }
 
     async convertToLegal(text) {
-        // CORREÇÃO: Prompt absoluto para o modo jurídico
-        const systemPrompt = "Você é um algoritmo de formatação jurídica. Reescreva o texto em linguagem jurídica formal (Juridiquês). REGRA CRÍTICA E ABSOLUTA: Retorne EXCLUSIVAMENTE o texto reescrito. Não inclua comentários, saudações, aspas ou texto explicativo. Saída estrita de dados.";
+        // Nova abordagem: Prompt arquitetado para precisão máxima na linguagem processual,
+        // herdando a temperatura 0.0 da função generate para evitar alucinações.
+        const systemPrompt = `Você é um assistente de formatação jurídica avançado operando no ecossistema do direito processual brasileiro. 
+Sua única função é reescrever o texto fornecido adotando o jargão jurídico formal, impessoal e técnico (Juridiquês).
+REGRA CRÍTICA E ABSOLUTA: Retorne EXCLUSIVAMENTE o texto reescrito. Sob nenhuma circunstância adicione saudações, introduções, aspas, notas explicativas ou quebras de linha desnecessárias. A saída deve ser pronta para ser colada em documentos oficiais.`;
+        
         return this.generate(systemPrompt, text);
     }
 }
