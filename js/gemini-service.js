@@ -1,22 +1,18 @@
-      /**
+/**
  * LlamaTextService - Arquiteto de Produto Front-end
- * Versão: 1.0.9 (Migração Groq/LLaMA)
+ * Versão: 1.0.9 (Migração Groq/LLaMA - Revisão Definitiva)
  * Finalidade: Processamento de texto via LLM com saída estrita.
  */
 
 class LlamaTextService {
     constructor() {
-        // Endpoint compatível com OpenAI fornecido pela Groq
         this.apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
-        // Compartilha o mesmo token gsk_ do serviço Whisper
         this.storageKey = 'dd_groq_token'; 
-        // Modelo LLaMA 3 8B: Equilíbrio ideal entre velocidade extrema e precisão
-        this.model = 'llama3-8b-8192'; 
+        
+        // CORREÇÃO: Utilizando o modelo mais robusto e obediente a instruções restritas
+        this.model = 'llama-3.3-70b-versatile'; 
     }
 
-    /**
-     * Recupera o token do LocalStorage ou solicita ao usuário.
-     */
     getToken() {
         let token = localStorage.getItem(this.storageKey);
         if (!token) {
@@ -30,9 +26,6 @@ class LlamaTextService {
         return token;
     }
 
-    /**
-     * Motor de execução genérico para chamadas à API.
-     */
     async generate(systemPrompt, userText) {
         const token = this.getToken();
         
@@ -42,7 +35,7 @@ class LlamaTextService {
                 { role: "system", content: systemPrompt },
                 { role: "user", content: userText }
             ],
-            temperature: 0.1, // Reduzido para 0.1 para máxima previsibilidade
+            temperature: 0.0, // CORREÇÃO: Temperatura ZERO para bloquear qualquer criatividade/alucinação
             max_tokens: 2048,
             stream: false
         };
@@ -57,13 +50,12 @@ class LlamaTextService {
                 body: JSON.stringify(payload)
             });
 
-            // Tratamento de Erro Robusto (Seção 1.c do plano anterior)
             if (!response.ok) {
                 let errorDetail = `Erro HTTP ${response.status}`;
                 try {
                     const errData = await response.json();
                     errorDetail = errData.error?.message || errorDetail;
-                } catch (e) { /* Fallback para status numérico */ }
+                } catch (e) { }
                 
                 if (response.status === 401) localStorage.removeItem(this.storageKey);
                 throw new Error(errorDetail);
@@ -72,7 +64,6 @@ class LlamaTextService {
             const data = await response.json();
             const content = data.choices[0].message.content.trim();
 
-            // Limpeza de segurança (Regex): Remove aspas extras se a IA falhar no prompt
             return content.replace(/^"|"$/g, '').trim();
 
         } catch (error) {
@@ -81,24 +72,17 @@ class LlamaTextService {
         }
     }
 
-    /**
-     * Funcionalidade do botão "Corrigir".
-     */
     async fixGrammar(text) {
-        const systemPrompt = "Você é um algoritmo de processamento de texto. Sua única função é corrigir erros gramaticais, ortográficos e de pontuação em Português do Brasil. REGRA CRÍTICA: Retorne EXCLUSIVAMENTE o texto corrigido. Proibido adicionar saudações, explicações ou aspas. Se o texto estiver correto, retorne-o exatamente como recebeu.";
+        // CORREÇÃO: Restauração do prompt longo e absoluto para forçar comportamento de máquina
+        const systemPrompt = "Você é um algoritmo de processamento de texto automatizado. Sua única função é corrigir erros gramaticais, ortográficos e de pontuação em Português do Brasil. REGRA CRÍTICA E ABSOLUTA: Retorne EXCLUSIVAMENTE o texto corrigido. Sob nenhuma circunstância adicione saudações, introduções, explicações, aspas ou notas. A sua saída será inserida diretamente em um banco de dados, portanto, qualquer palavra extra causará erro no sistema.";
         return this.generate(systemPrompt, text);
     }
 
-    /**
-     * Funcionalidade do botão "Jurídico".
-     */
     async convertToLegal(text) {
-        const systemPrompt = "Você é um algoritmo de tradução jurídica. Converta o texto para linguagem jurídica formal (juridiquês). REGRA CRÍTICA: Retorne EXCLUSIVAMENTE o texto convertido. Proibido adicionar comentários, notas ou aspas.";
+        // CORREÇÃO: Prompt absoluto para o modo jurídico
+        const systemPrompt = "Você é um algoritmo de formatação jurídica. Reescreva o texto em linguagem jurídica formal (Juridiquês). REGRA CRÍTICA E ABSOLUTA: Retorne EXCLUSIVAMENTE o texto reescrito. Não inclua comentários, saudações, aspas ou texto explicativo. Saída estrita de dados.";
         return this.generate(systemPrompt, text);
     }
 }
 
-// Exportação da instância para uso no main.js
 export const aiService = new LlamaTextService();
-      
-                
