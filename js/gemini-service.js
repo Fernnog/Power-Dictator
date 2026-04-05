@@ -52,8 +52,20 @@ class LlamaTextService {
             });
 
             if (!response.ok) {
-                if (response.status === 401) localStorage.removeItem(this.storageKey);
-                throw new Error(`Erro na API Groq: ${response.statusText}`);
+                // Tenta extrair o corpo do erro em JSON enviado pela Groq
+                let errorDetail = `Erro HTTP ${response.status}`;
+                try {
+                    const errData = await response.json();
+                    errorDetail = errData.error?.message || errorDetail;
+                } catch (parseError) {
+                    // Se não conseguir converter em JSON, mantém o status numérico
+                }
+                
+                if (response.status === 401) {
+                    localStorage.removeItem(this.storageKey);
+                }
+                
+                throw new Error(errorDetail);
             }
 
             const data = await response.json();
