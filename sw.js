@@ -3,7 +3,7 @@
 // Mas para eliminar 100% de risco, vamos prefixar com o nome do repositório:
 
 // Atualize a versão do cache para forçar os navegadores a baixarem as novidades
-const CACHE_NAME = 'power-dictator-cache-v1.1.0';
+const CACHE_NAME = 'power-dictator-cache-v1.1.1';
 
 // Na lista de arquivos, garanta o uso de caminhos relativos explícitos
 const ASSETS_TO_CACHE = [
