@@ -1,5 +1,5 @@
 import { SpeechManager } from './speech-manager.js';
-import { aiService } from './llm-service.js'; // <- ATUALIZADO: Importação do novo módulo
+import { aiService } from './llm-service.js';
 import { changelogData, currentVersion } from './changelog.js';
 import Glossary from './glossary.js';
 import { CONFIG } from './config.js';
@@ -20,7 +20,7 @@ const ui = {
     audioSource: document.getElementById('audioSource'),
     fileInput: document.getElementById('fileInput'),
     
-    // [NOVO] Controle de Motor
+    // Controle de Motor
     engineToggle: document.getElementById('engineToggle'),
     engineLabel: document.getElementById('engineLabel'),
     
@@ -48,7 +48,11 @@ const ui = {
     glossaryList: document.getElementById('glossaryList'),
     termInput: document.getElementById('termInput'),
     replaceInput: document.getElementById('replaceInput'),
-    addTermBtn: document.getElementById('addTermBtn')
+    addTermBtn: document.getElementById('addTermBtn'),
+
+    // [NOVO] Modo Foco e PWA
+    focusModeBtn: document.getElementById('focusModeBtn'),
+    installPwaBtn: document.getElementById('installPwaBtn')
 };
 
 // Variáveis de Estado
@@ -244,6 +248,15 @@ ui.micBtn.addEventListener('click', () => {
     }
 });
 
+// [NOVO] Toggle do Modo Foco
+if (ui.focusModeBtn) {
+    ui.focusModeBtn.addEventListener('click', () => {
+        ui.container.classList.toggle('focus-mode');
+        // Rola para o fim do texto ao expandir
+        ui.textarea.scrollTop = ui.textarea.scrollHeight;
+    });
+}
+
 if (ui.engineToggle) {
     ui.engineToggle.addEventListener('change', (e) => {
         const isChecked = e.target.checked;
@@ -282,7 +295,6 @@ ui.btnAiFix.addEventListener('click', () => {
     });
 });
 
-// <- ATUALIZADO: Nova lógica unificada para o botão Jurídico
 ui.btnAiLegal.addEventListener('click', () => {
     const text = ui.textarea.value.trim();
     if (!text) return alert("Digite ou dite algo primeiro.");
@@ -479,7 +491,7 @@ window.addEventListener('DOMContentLoaded', () => {
     ui.versionBtn.textContent = `v${currentVersion}`;
     initDeviceSelector();
 
-    // [NOVO] Inicializa estado da Chave Seletora
+    // Inicializa estado da Chave Seletora
     if (ui.engineToggle) {
         const savedEngine = localStorage.getItem('dd_engine_pref') || 'native';
         const isWhisper = savedEngine === 'whisper';
@@ -502,3 +514,29 @@ window.addEventListener('DOMContentLoaded', () => {
         }, 100);
     }
 });
+
+// ========================================================
+// 10. LÓGICA DE INSTALAÇÃO PWA (NOVO)
+// ========================================================
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e) => {
+    // Impede o mini-infobar padrão do Chrome
+    e.preventDefault();
+    // Guarda o evento para o botão disparar depois
+    deferredPrompt = e;
+    // Exibe o botão de instalação na interface
+    if (ui.installPwaBtn) ui.installPwaBtn.style.display = 'block';
+});
+
+if (ui.installPwaBtn) {
+    ui.installPwaBtn.addEventListener('click', async () => {
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            if (outcome === 'accepted') {
+                ui.installPwaBtn.style.display = 'none';
+            }
+            deferredPrompt = null;
+        }
+    });
+}
