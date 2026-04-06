@@ -917,3 +917,31 @@ kbd {
     from { transform: scale(0); opacity: 0; }
     to { transform: scale(1); opacity: 1; }
 }
+
+/* =============================================== */
+/* 12. MODO FOCO (MOBILE & EXPANSÃO DE TEXTO)      */
+/* =============================================== */
+.container.focus-mode .app-header,
+.container.focus-mode .subtitle,
+.container.focus-mode .visualizer-container,
+.container.focus-mode .engine-selector-container,
+.container.focus-mode .device-selector-container {
+    display: none !important;
+}
+
+.container.focus-mode .editor-area {
+    height: 100%;
+    margin-bottom: 0.5rem;
+    flex-grow: 1;
+}
+
+/* Transforma os botões em ícones quadrados/compactos */
+.container.focus-mode .control-dock .btn-action span {
+    display: none; 
+}
+
+.container.focus-mode .control-dock .btn-action {
+    flex: 1; 
+    padding: 12px 0;
+    min-width: 48px;
+}
