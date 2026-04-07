@@ -58,23 +58,6 @@
     </div>
 
     <script>
-        // 1. Registro do Service Worker no Launcher (Critério obrigatório PWA)
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js', { scope: './' })
-                    .then(() => console.log('PWA: SW registrado no Launcher.'))
-                    .catch(err => console.error('PWA: Erro no Launcher', err));
-            });
-        }
-
-        // 2. Redirecionamento Inteligente Mobile-First
-        // Oculta a tela de Launcher (inútil no Android) e vai direto pro App
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        if (isMobile) {
-            window.location.replace('./app.html'); 
-        }
-
-        // 3. Lógica do Launcher Desktop (Mantida e isolada)
         document.getElementById('openAppBtn').addEventListener('click', () => {
             const width = 1080;
             const height = 800;
@@ -96,3 +79,4 @@
     </script>
 </body>
 </html>
+
