@@ -945,3 +945,10 @@ kbd {
     padding: 12px 0;
     min-width: 48px;
 }
+
+/* Cole no final do arquivo style.css */
+@media (max-width: 768px) {
+    .btn-toggle-size {
+        display: none !important;
+    }
+}
