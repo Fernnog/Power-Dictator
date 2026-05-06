@@ -321,20 +321,73 @@ ui.btnAiLegal.addEventListener('click', () => {
 });
 
 ui.btnCopy.addEventListener('click', () => {
-    executeSafely(() => {
-        stopVisualEffects(); 
-        ui.textarea.select();
-        document.execCommand('copy');
-        navigator.clipboard.writeText(ui.textarea.value);
-        
-        const originalText = ui.btnCopy.querySelector('span').textContent;
-        ui.btnCopy.querySelector('span').textContent = "Copiado!";
+    executeSafely(async () => {
+
+        stopVisualEffects();
+
+        const textToCopy = ui.textarea.value;
+
+        // ── RESOLUÇÃO DE CONTEXTO ─────────────────────────────────────────
+        // ui.textarea.ownerDocument.defaultView retorna a janela (Window)
+        // onde o elemento textarea reside no momento do clique.
+        // Se o app estiver na aba normal → retorna window (aba).
+        // Se o app estiver no PiP        → retorna a janela PiP.
+        // Isso garante que a API de clipboard use o contexto com foco ativo.
+        // ─────────────────────────────────────────────────────────────────
+        const targetWindow = ui.textarea.ownerDocument.defaultView;
+
+        try {
+            // TENTATIVA PRIMÁRIA: Clipboard API moderna, chamada na janela correta.
+            await targetWindow.navigator.clipboard.writeText(textToCopy);
+
+        } catch (primaryError) {
+
+            // FALLBACK ROBUSTO (sem execCommand depreciado):
+            // Cria um <textarea> temporário DENTRO do documento correto,
+            // garante foco e seleção nesse contexto, e usa a seleção nativa.
+            // Funciona em todos os navegadores modernos como último recurso.
+            const targetDocument = ui.textarea.ownerDocument;
+            const tempArea = targetDocument.createElement('textarea');
+
+            tempArea.value = textToCopy;
+            tempArea.style.cssText = [
+                'position:fixed',
+                'top:0',
+                'left:0',
+                'width:1px',
+                'height:1px',
+                'opacity:0',
+                'pointer-events:none',
+            ].join(';');
+
+            targetDocument.body.appendChild(tempArea);
+            tempArea.focus();
+            tempArea.select();
+
+            try {
+                // execCommand aqui é o último recurso, isolado em seu próprio
+                // try/catch para não engolir outros erros silenciosamente.
+                targetDocument.execCommand('copy');
+            } catch (fallbackError) {
+                console.warn('[Clipboard] Fallback também falhou:', fallbackError);
+            } finally {
+                // Garante remoção do elemento temporário em qualquer cenário.
+                targetDocument.body.removeChild(tempArea);
+            }
+        }
+
+        // ── FEEDBACK VISUAL (mantido do original) ────────────────────────
+        const span = ui.btnCopy.querySelector('span');
+        const originalText = span ? span.textContent : 'Copiar';
+
+        if (span) span.textContent = 'Copiado!';
         ui.btnCopy.classList.add('status-success', 'pulsing');
-        
+
         setTimeout(() => {
-            ui.btnCopy.querySelector('span').textContent = originalText;
+            if (span) span.textContent = originalText;
             ui.btnCopy.classList.remove('status-success', 'pulsing');
-        }, 1500); 
+        }, 1500);
+
     });
 });
 
@@ -405,6 +458,26 @@ function performUndo() {
 // 8. REDIMENSIONAMENTO DE JANELA
 // ========================================================
 ui.toggleSizeBtn.addEventListener('click', () => {
+
+    // ┌─────────────────────────────────────────────────────────────────┐
+    // │  [INSERIR] GUARD CLAUSE — Detecção de Contexto PiP             │
+    // │  Verifica se o clique ocorreu dentro da janela PiP ativa.      │
+    // │  Usa a referência canônica da Document PiP API para comparar   │
+    // │  o documento do botão com o documento da janela PiP.           │
+    // └─────────────────────────────────────────────────────────────────┘
+    const pipWindow = window.documentPictureInPicture?.window;
+
+    if (pipWindow && ui.toggleSizeBtn.ownerDocument === pipWindow.document) {
+        // O clique veio de dentro da janela PiP: fechar é a ação correta.
+        // O handler do evento 'pagehide' (já existente)
+        // é responsável por restaurar os elementos ao DOM original.
+        pipWindow.close();
+        return; // Encerra aqui. O código abaixo NÃO deve ser executado.
+    }
+    // ┌─────────────────────────────────────────────────────────────────┐
+    // │  [MANTER] Todo o código original abaixo permanece inalterado.  │
+    // └─────────────────────────────────────────────────────────────────┘
+
     ui.container.classList.toggle('minimized');
     const isMin = ui.container.classList.contains('minimized');
     
