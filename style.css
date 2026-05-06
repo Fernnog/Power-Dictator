@@ -105,7 +105,6 @@ body {
 .container.minimized .subtitle,
 .container.minimized .editor-footer,
 .container.minimized .btn-upload, 
-.container.minimized .status-bar,
 .container.minimized .device-selector-container,
 .container.minimized .header-actions { 
     display: none !important;
@@ -1032,8 +1031,46 @@ body.is-pip-mode .container {
     padding: 0;
 }
 
-/* Garante que botões de controle de janela não apareçam dentro do PiP */
-body.is-pip-mode .btn-popout,
-body.is-pip-mode .btn-toggle-size {
+/* Garante que apenas o botão de destacar fique oculto dentro do PiP */
+body.is-pip-mode .btn-popout {
     display: none !important;
+}
+
+/* ============================================================
+   MODO PICTURE-IN-PICTURE: Botão de Retorno Visível
+   Garante que o botão de restaurar a janela seja visível
+   e utilizável quando o app está no modo destacado.
+   ============================================================ */
+body.is-pip-mode .btn-toggle-size {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ============================================================
+   WIDGET MINIMIZADO: Pílula de Status Flutuante
+   Transforma a status-bar em um micro-indicador
+   sobreposto quando o container está no modo recolhido.
+   ============================================================ */
+.container.minimized .status-bar {
+    display: flex;
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    width: auto;
+    height: 22px;
+    padding: 0 10px;
+    font-size: 0.65rem;
+    letter-spacing: 0.02em;
+    z-index: 60;
+
+    /* Vidro fosco: elegante e não distrai */
+    background: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px); /* Compatibilidade Safari/iOS */
+    border-radius: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.10);
+
+    /* Não intercepta cliques — o usuário interage com o painel normalmente */
+    pointer-events: none;
 }
