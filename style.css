@@ -945,3 +945,95 @@ kbd {
     padding: 12px 0;
     min-width: 48px;
 }
+
+/* =============================================== */
+/* 13. RESPONSIVIDADE SMART & POP-OUT WIDGET       */
+/* =============================================== */
+
+/* --- BASE: Ambos os botões ocultos por padrão em qualquer contexto --- */
+/* Esta regra é a fonte única de verdade para a visibilidade inicial.   */
+.btn-popout,
+.btn-install-pwa {
+    display: none;
+}
+
+/* -----------------------------------------------  */
+/* MOBILE: Preenche a tela inteira, sem intermediário */
+/* -----------------------------------------------  */
+@media (max-width: 768px) {
+
+    body {
+        align-items: flex-start; /* Remove centralização vertical, importante em telas longas */
+        overflow-y: auto;
+    }
+
+    .container {
+        /* dvh = Dynamic Viewport Height: desconta a barra de endereço do browser mobile */
+        height: 100dvh !important;
+        max-width: 100% !important;
+        border-radius: 0 !important;
+        padding: 1rem !important;
+        box-shadow: none !important;
+    }
+
+    /* O botão de alternar tamanho não faz sentido em mobile */
+    .btn-toggle-size {
+        display: none !important;
+    }
+}
+
+/* -----------------------------------------------  */
+/* DESKTOP — ABA NORMAL: Exibe o botão "Destacar"   */
+/* Ativado pelo JS ao adicionar 'is-desktop-tab'    */
+/* ao <body>. Nunca aparece em popup ou PWA.        */
+/* -----------------------------------------------  */
+body.is-desktop-tab .btn-popout {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background-color: #f59e0b;
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 5px 10px;
+    cursor: pointer;
+    transition: filter 0.2s;
+}
+body.is-desktop-tab .btn-popout:hover {
+    filter: brightness(1.1);
+}
+
+/* -----------------------------------------------  */
+/* QUALQUER CONTEXTO: Exibe botão Instalar quando   */
+/* o evento beforeinstallprompt for capturado       */
+/* -----------------------------------------------  */
+body.show-install-btn .btn-install-pwa {
+    display: block;
+    background-color: #10b981;
+    color: white;
+}
+
+/* -----------------------------------------------  */
+/* MODO DOCUMENT PICTURE-IN-PICTURE (Chrome 116+)  */
+/* Aplicado ao body da JANELA PiP pelo JavaScript  */
+/* -----------------------------------------------  */
+body.is-pip-mode {
+    background-color: transparent;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+body.is-pip-mode .container {
+    height: 100vh;
+    width: 100vw;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0;
+}
+
+/* Garante que botões de controle de janela não apareçam dentro do PiP */
+body.is-pip-mode .btn-popout,
+body.is-pip-mode .btn-toggle-size {
+    display: none !important;
+}
