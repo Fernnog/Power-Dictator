@@ -50,9 +50,10 @@ const ui = {
     replaceInput: document.getElementById('replaceInput'),
     addTermBtn: document.getElementById('addTermBtn'),
 
-    // [NOVO] Modo Foco e PWA
+   // [NOVO] Modo Foco e PWA
     focusModeBtn: document.getElementById('focusModeBtn'),
-    installPwaBtn: document.getElementById('installPwaBtn')
+    installPwaBtn: document.getElementById('installPwaBtn'),
+    popOutBtn: document.getElementById('popOutBtn')
 };
 
 // Variáveis de Estado
@@ -505,6 +506,123 @@ window.addEventListener('DOMContentLoaded', () => {
         triggerUndo: performUndo
     });
 
+    // ========================================================
+    // SMART BOOT — Detecção de Contexto (100% Síncrono)
+    // ========================================================
+    // Todas as detecções são realizadas UMA ÚNICA VEZ, no boot,
+    // antes do primeiro clique. Isso garante que os handlers
+    // registrados abaixo nunca misturem awaits com window.open,
+    // evitando o bloqueio do gesture token pelo navegador.
+
+    const _isMobile     = window.matchMedia('(max-width: 768px)').matches;
+    const _isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+    const _isPopup      = !!window.opener; // true quando aberto via window.open
+    const _canUsePiP    = 'documentPictureInPicture' in window;
+
+    // Injeta a classe que torna o botão "Destacar" visível APENAS
+    // quando o app está em uma aba normal de desktop.
+    if (!_isMobile && !_isStandalone && !_isPopup) {
+        document.body.classList.add('is-desktop-tab');
+    }
+
+    // ========================================================
+    // POP-OUT WIDGET — Dois Paths Mutuamente Exclusivos
+    // ========================================================
+    if (ui.popOutBtn) {
+
+        if (_canUsePiP) {
+            // -----------------------------------------------
+            // PATH A: Chrome 116+ — Document Picture-in-Picture
+            // Janela sempre visível (always-on-top).
+            // O handler é async, mas window.open NÃO é chamado
+            // aqui — elimina o risco de popup blocker.
+            // -----------------------------------------------
+            ui.popOutBtn.addEventListener('click', async () => {
+                try {
+                    const pipWindow = await documentPictureInPicture.requestWindow({
+                        width: 360,
+                        height: 500
+                    });
+
+                    // Transferência de estilos para o documento PiP.
+                    // cssRules falha para folhas cross-origin (Google Fonts) —
+                    // o catch cria um <link> como fallback seguro.
+                    [...document.styleSheets].forEach((sheet) => {
+                        try {
+                            const rules = [...sheet.cssRules].map(r => r.cssText).join('');
+                            const style = pipWindow.document.createElement('style');
+                            style.textContent = rules;
+                            pipWindow.document.head.appendChild(style);
+                        } catch (_e) {
+                            if (sheet.href) {
+                                const link = pipWindow.document.createElement('link');
+                                link.rel = 'stylesheet';
+                                link.href = sheet.href;
+                                pipWindow.document.head.appendChild(link);
+                            }
+                        }
+                    });
+
+                    // Marca o documento da janela PiP com sua classe de modo.
+                    pipWindow.document.body.classList.add('is-pip-mode');
+
+                    // Move o container para a janela PiP.
+                    // As referências do objeto `ui` continuam válidas:
+                    // os event listeners vivem nos elementos, não no document.
+                    // O AudioContext e o canvas 2D context também são portáteis.
+                    pipWindow.document.body.appendChild(ui.container);
+
+                    // Aplica o modo widget imediatamente na janela PiP
+                    if (!ui.container.classList.contains('minimized')) {
+                        ui.container.classList.add('minimized');
+                    }
+
+                    // Devolve o container ao document original quando o PiP fechar
+                    pipWindow.addEventListener('pagehide', () => {
+                        document.body.appendChild(ui.container);
+                        // Mantém o modo minimizado; usuário pode expandir com o toggle
+                    });
+
+                } catch (err) {
+                    // PiP foi bloqueado (ex: usuário negou permissão).
+                    // NÃO chamamos window.open aqui — o gesture token já foi
+                    // consumido pelo await acima e o popup seria bloqueado.
+                    console.warn('Document PiP bloqueado:', err);
+                    ui.statusMsg.textContent = 'Permissão de janela negada pelo navegador.';
+                    ui.statusMsg.className = 'status-bar active status-warning';
+                    setTimeout(() => {
+                        ui.statusMsg.textContent = '';
+                        ui.statusMsg.className = 'status-bar';
+                    }, 4000);
+                }
+            });
+
+        } else {
+            // -----------------------------------------------
+            // PATH B: Firefox / Safari / Edge — window.open
+            // Handler 100% síncrono: o gesture token do clique
+            // é preservado, eliminando o risco de bloqueio.
+            // O popup recebe ?mode=compact, que é detectado
+            // pelo bloco existente logo abaixo, aplicando
+            // automaticamente a classe .minimized via toggleSizeBtn.click()
+            // -----------------------------------------------
+            ui.popOutBtn.addEventListener('click', () => {
+                const W = 360;
+                const H = 500;
+                const screenLeft = window.screen.availLeft || 0;
+                const screenTop  = window.screen.availTop  || 0;
+                const left = (screenLeft + window.screen.availWidth)  - W - 10;
+                const top  = (screenTop  + window.screen.availHeight) - H - 10;
+
+                window.open(
+                    window.location.pathname + '?mode=compact',
+                    'DitadoWidget',
+                    `width=${W},height=${H},left=${left},top=${top},popup=yes`
+                );
+            });
+        }
+    }
+
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('mode') === 'compact') {
         setTimeout(() => {
@@ -516,16 +634,14 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 // ========================================================
-// 10. LÓGICA DE INSTALAÇÃO PWA (NOVO)
+// 10. LÓGICA DE INSTALAÇÃO PWA
 // ========================================================
 let deferredPrompt;
 window.addEventListener('beforeinstallprompt', (e) => {
-    // Impede o mini-infobar padrão do Chrome
     e.preventDefault();
-    // Guarda o evento para o botão disparar depois
     deferredPrompt = e;
-    // Exibe o botão de instalação na interface
-    if (ui.installPwaBtn) ui.installPwaBtn.style.display = 'block';
+    // Usa classe CSS em vez de style inline — respeita a especificidade do CSS
+    document.body.classList.add('show-install-btn');
 });
 
 if (ui.installPwaBtn) {
@@ -534,7 +650,7 @@ if (ui.installPwaBtn) {
             deferredPrompt.prompt();
             const { outcome } = await deferredPrompt.userChoice;
             if (outcome === 'accepted') {
-                ui.installPwaBtn.style.display = 'none';
+                document.body.classList.remove('show-install-btn');
             }
             deferredPrompt = null;
         }
