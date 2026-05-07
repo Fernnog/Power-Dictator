@@ -597,6 +597,20 @@ textarea {
 
 .container.minimized .engine-selector-container { display: none; } /* Oculta no widget para economizar espaço */
 
+/* -----------------------------------------------  */
+/* Drag & Drop — Feedback visual no botão Copiar    */
+/* Cursor 'grab' sinaliza a ação de arrastar        */
+/* -----------------------------------------------  */
+.btn-copy[draggable="true"] {
+    cursor: grab;
+}
+
+.btn-copy[draggable="true"]:active {
+    cursor: grabbing;
+    opacity: 0.75;
+    transform: scale(0.97);
+}
+
 /* =============================================== */
 /* 7. TOOLTIPS                                    */
 /* =============================================== */
@@ -949,11 +963,40 @@ kbd {
 /* 13. RESPONSIVIDADE SMART & POP-OUT WIDGET       */
 /* =============================================== */
 
-/* --- BASE: Ambos os botões ocultos por padrão em qualquer contexto --- */
-/* Esta regra é a fonte única de verdade para a visibilidade inicial.   */
-.btn-popout,
+/* --- BASE: Botões controlados por contexto, ocultos por padrão --- */
+.btn-popout-icon,
 .btn-install-pwa {
     display: none;
+}
+
+/* -----------------------------------------------  */
+/* Novo botão ícone de Pop-out (minimalista)         */
+/* Posicionado à esquerda do btn-toggle-size          */
+/* -----------------------------------------------  */
+.btn-popout-icon {
+    position: absolute;
+    top: 1rem;
+    right: 4rem; /* 64px — gap de 12px em relação ao toggleSizeBtn (36px + 16px) */
+    background: transparent;
+    border: none;
+    color: var(--c-magic); /* Amber — mantém identidade visual alaranjada */
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 50%;
+    z-index: 10;
+    transition: background 0.2s, transform 0.2s;
+    line-height: 0; /* Remove espaço fantasma abaixo do SVG */
+}
+
+.btn-popout-icon:hover {
+    background: #fef3c7; /* Amber-50 — feedback sutil no hover */
+    transform: scale(1.12);
+}
+
+/* MODO COMPACTO — Reposiciona o pop-out para não colidir com o toggle reposicionado */
+.container.minimized .btn-popout-icon {
+    top: 5px;
+    right: 42px; /* Equivalente ao toggle em modo minimizado (right: 5px + 37px de largura) */
 }
 
 /* -----------------------------------------------  */
@@ -982,24 +1025,19 @@ kbd {
 }
 
 /* -----------------------------------------------  */
-/* DESKTOP — ABA NORMAL: Exibe o botão "Destacar"   */
+/* DESKTOP — ABA NORMAL: Exibe o botão pop-out      */
 /* Ativado pelo JS ao adicionar 'is-desktop-tab'    */
 /* ao <body>. Nunca aparece em popup ou PWA.        */
 /* -----------------------------------------------  */
-body.is-desktop-tab .btn-popout {
+body.is-desktop-tab .btn-popout-icon {
     display: flex;
     align-items: center;
-    gap: 5px;
-    background-color: #f59e0b;
-    color: white;
-    font-size: 0.75rem;
-    font-weight: 700;
-    padding: 5px 10px;
-    cursor: pointer;
-    transition: filter 0.2s;
+    justify-content: center;
 }
-body.is-desktop-tab .btn-popout:hover {
-    filter: brightness(1.1);
+
+/* MODO PiP — Oculta o pop-out dentro da janela flutuante */
+body.is-pip-mode .btn-popout-icon {
+    display: none !important;
 }
 
 /* -----------------------------------------------  */
@@ -1031,10 +1069,7 @@ body.is-pip-mode .container {
     padding: 0;
 }
 
-/* Garante que apenas o botão de destacar fique oculto dentro do PiP */
-body.is-pip-mode .btn-popout {
-    display: none !important;
-}
+/* Garante que apenas o botão de destacar fique oculto dentro do PiP (Atualizado acima) */
 
 /* ============================================================
    MODO PICTURE-IN-PICTURE: Botão de Retorno Visível
@@ -1073,4 +1108,75 @@ body.is-pip-mode .btn-toggle-size {
 
     /* Não intercepta cliques — o usuário interage com o painel normalmente */
     pointer-events: none;
+}
+
+/* =============================================== */
+/* 14. PLACEHOLDER DO MODO PiP (TELA DE DESCANSO) */
+/* =============================================== */
+
+.pip-placeholder {
+    position: fixed;
+    inset: 0; /* Equivale a top/right/bottom/left: 0 — cobertura total */
+    background: var(--bg-app);
+    display: flex; /* Controlado via JS (style.display = 'flex' | 'none') */
+    align-items: center;
+    justify-content: center;
+    z-index: 0; /* Abaixo do container principal quando este retornar */
+    animation: placeholderFadeIn 0.4s ease;
+}
+
+@keyframes placeholderFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+.placeholder-content {
+    position: relative; /* OBRIGATÓRIO: ancora o .pulse-ring corretamente */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.75rem;
+    padding: 2rem;
+}
+
+.placeholder-icon {
+    color: var(--c-mic); /* Indigo — coerente com a identidade da aplicação */
+    opacity: 0.4;
+}
+
+.placeholder-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--text-main);
+    margin: 0;
+    letter-spacing: -0.3px;
+}
+
+.placeholder-body {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    line-height: 1.6;
+    margin: 0;
+    max-width: 300px;
+}
+
+/* Anel de pulso centralizado, relativo a .placeholder-content */
+.pulse-ring {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: rgba(79, 70, 229, 0.07);
+    animation: placeholderPulse 2.5s ease-out infinite;
+    z-index: -1; /* Fica atrás do conteúdo, relativo ao .placeholder-content posicionado */
+    pointer-events: none;
+}
+
+@keyframes placeholderPulse {
+    0%   { transform: translate(-50%, -50%) scale(0.6); opacity: 1; }
+    100% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
 }
