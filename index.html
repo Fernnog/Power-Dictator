@@ -24,7 +24,27 @@
 </head>
 <body>
 
+    <!-- [INSERIR] Âncora invisível para a imagem fantasma do Drag & Drop -->
+    <div id="dragImage" aria-hidden="true" style="
+        position: fixed;
+        top: -9999px;
+        left: -9999px;
+        width: 1px;
+        height: 1px;
+        pointer-events: none;
+        opacity: 0;
+    "></div>
+
     <div id="appContainer" class="container">
+        <!-- [INSERIR] Novo botão Pop-out — ícone minimalista, sem texto -->
+        <button id="popOutBtn" class="btn-popout-icon" title="Destacar como Widget Flutuante">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                <polyline points="15 3 21 3 21 9"/>
+                <line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+        </button>
+        
         <button id="toggleSizeBtn" class="btn-toggle-size" title="Alternar Modo Compacto">
             <svg id="iconMinimize" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>
             <svg id="iconMaximize" style="display:none;" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
@@ -37,15 +57,7 @@
                 <div class="header-actions">
                     <button id="versionBtn" class="version-pill">v1.1.2</button>
 
-                    <!-- [NOVO] Botão Pop-out — visibilidade controlada 100% pelo CSS -->
-                    <button id="popOutBtn" class="version-pill btn-popout" title="Destacar como Widget Flutuante">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                            <polyline points="15 3 21 3 21 9"/>
-                            <line x1="10" y1="14" x2="21" y2="3"/>
-                        </svg>
-                        Destacar
-                    </button>
+                   <!-- Botão Pop-out antigo removido daqui -->
 
                     <!-- Botão de Instalação PWA — sem style="display:none" inline -->
                     <button id="installPwaBtn" class="version-pill btn-install-pwa">
@@ -187,6 +199,19 @@
             });
         }
     </script>
+
+    <!-- [INSERIR] Placeholder de estado — exibido na aba original durante o modo PiP -->
+    <div id="pipPlaceholder" class="pip-placeholder" aria-live="polite" style="display: none;">
+        <div class="placeholder-content">
+            <div class="pulse-ring"></div>
+            <svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="placeholder-icon">
+                <rect width="18" height="18" x="3" y="3" rx="2"/>
+                <path d="M8 8h8v8H8z"/>
+            </svg>
+            <h2 class="placeholder-title">Modo Compacto Ativo</h2>
+            <p class="placeholder-body">A aplicação está rodando na janela flutuante.<br>Esta aba ficará disponível quando você fechar o widget.</p>
+        </div>
+    </div>
 
 </body>
 </html>
