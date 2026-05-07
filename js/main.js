@@ -53,7 +53,13 @@ const ui = {
    // [NOVO] Modo Foco e PWA
     focusModeBtn: document.getElementById('focusModeBtn'),
     installPwaBtn: document.getElementById('installPwaBtn'),
-    popOutBtn: document.getElementById('popOutBtn')
+    popOutBtn: document.getElementById('popOutBtn'),
+
+    // [INSERIR] Elemento fantasma para o Drag & Drop
+    dragImage:      document.getElementById('dragImage'),
+
+    // [INSERIR] Placeholder de estado do modo PiP
+    pipPlaceholder: document.getElementById('pipPlaceholder')
 };
 
 // Variáveis de Estado
@@ -375,6 +381,47 @@ ui.btnCopy.addEventListener('click', () => {
     });
 });
 
+// -------------------------------------------------------
+// DRAG & DROP — Transferência de texto para apps externos
+// Ativado apenas em dispositivos com suporte a ponteiro
+// (desktops). Desativado silenciosamente em touch/mobile.
+// -------------------------------------------------------
+const supportsHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
+if (supportsHover) {
+    // Habilita o arraste apenas onde faz sentido
+    ui.btnCopy.setAttribute('draggable', 'true');
+
+    ui.btnCopy.addEventListener('dragstart', (e) => {
+        const textToDrag = ui.textarea.value.trim();
+
+        // Aborta silenciosamente se não houver conteúdo
+        if (!textToDrag) {
+            e.preventDefault();
+            return;
+        }
+
+        // Define o dado a ser transferido ao sistema operacional
+        e.dataTransfer.setData('text/plain', textToDrag);
+
+        // Sinaliza ao app de destino que esta é uma operação de cópia
+        e.dataTransfer.effectAllowed = 'copy';
+
+        // Substitui a imagem fantasma padrão (miniatura do botão)
+        // por um elemento invisível (1x1px), tornando o arraste discreto
+        e.dataTransfer.setDragImage(ui.dragImage, 0, 0);
+    });
+
+    ui.btnCopy.addEventListener('dragend', (e) => {
+        // dropEffect === 'none' significa que o usuário soltou
+        // em um destino que não aceitou o drop (ou cancelou com Esc)
+        if (e.dataTransfer.dropEffect === 'none') {
+            // Informa o usuário de forma não invasiva, se desejar (opcional)
+        }
+        // Nenhum reset de opacity necessário — o CSS :active trata o feedback visual
+    });
+}
+
 ui.btnClear.addEventListener('click', () => executeSafely(() => handleClearAction()));
 
 function handleClearAction() {
@@ -620,8 +667,18 @@ window.addEventListener('DOMContentLoaded', () => {
                         ui.container.classList.add('minimized');
                     }
 
+                    // [INSERIR] Exibe a tela de descanso na aba original
+                    if (ui.pipPlaceholder) {
+                        ui.pipPlaceholder.style.display = 'flex';
+                    }
+
                     // RESTAURAÇÃO DE ESTADO AO FECHAR PiP
                     pipWindow.addEventListener('pagehide', () => {
+                        // [INSERIR] Remove a tela de descanso ao retornar
+                        if (ui.pipPlaceholder) {
+                            ui.pipPlaceholder.style.display = 'none';
+                        }
+                        
                         // 1. Reattacha o container à janela principal
                         document.body.appendChild(ui.container);
 
