@@ -1,0 +1,62 @@
+name: Substituir Trecho de Arquivo
+
+on:
+  workflow_dispatch:
+    inputs:
+      file_path:
+        description: 'Caminho do arquivo (ex: src/index.js ou README.md)'
+        required: true
+        type: string
+      old_text:
+        description: 'Trecho exato que deve ser removido'
+        required: true
+        type: string
+      new_text:
+        description: 'Novo trecho a ser inserido no lugar'
+        required: true
+        type: string
+
+# Dá permissão para o bot salvar as mudanças no repositório
+permissions:
+  contents: write
+
+jobs:
+  replace-and-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Fazer o Checkout do Código
+        uses: actions/checkout@v4
+
+      - name: 🔄 Substituir o Texto
+        env:
+          FILE_PATH: ${{ inputs.file_path }}
+          OLD_TEXT: ${{ inputs.old_text }}
+          NEW_TEXT: ${{ inputs.new_text }}
+        run: |
+          python3 -c '
+          import os
+          file_path = os.environ["FILE_PATH"]
+          old_text = os.environ["OLD_TEXT"]
+          new_text = os.environ["NEW_TEXT"]
+          
+          try:
+              with open(file_path, "r", encoding="utf-8") as file:
+                  content = file.read()
+                  
+              if old_text in content:
+                  content = content.replace(old_text, new_text)
+                  with open(file_path, "w", encoding="utf-8") as file:
+                      file.write(content)
+                  print(f"✅ Sucesso: O texto foi substituído no arquivo {file_path}")
+              else:
+                  print(f"⚠️ Aviso: O trecho antigo não foi encontrado no arquivo {file_path}")
+          except FileNotFoundError:
+              print(f"❌ Erro: O arquivo {file_path} não foi encontrado.")
+              exit(1)
+          '
+
+      - name: 💾 Salvar (Commit) as Mudanças
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Automated: Substituição de texto em ${{ inputs.file_path }}"
+          branch: ${{ github.ref }}
