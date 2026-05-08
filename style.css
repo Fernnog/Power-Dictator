@@ -1211,17 +1211,17 @@ body.is-pip-mode .btn-toggle-size {
 
 .container.minimalist-mode .control-dock {
   background: var(--bg-card, #ffffff);
-  border-radius: 40px;
-  padding: 8px 14px;
-  gap: 14px;
+  border-radius: 50%;       /* Círculo perfeito ao redor do microfone */
+  padding: 4px;
+  gap: 0;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
   border: 1px solid var(--border, #e5e7eb);
   align-items: center;
   justify-content: center;
 }
 
-/* Oculta tudo no dock, exceto os controles essenciais do widget */
-.container.minimalist-mode .control-dock > *:not(#micBtn):not(#aiFixBtn):not(#dragHandle):not(#exitMinimalistBtn) {
+/* Ultra Minimalista: apenas o botão de microfone permanece visível */
+.container.minimalist-mode .control-dock > *:not(#micBtn) {
   display: none !important;
 }
 
@@ -1250,6 +1250,10 @@ body.is-pip-mode .btn-toggle-size {
 /* ================================================================ */
 
 .minimalist-popover {
+  /* display NÃO é declarado aqui.
+     O atributo HTML [hidden] age normalmente (display:none) fora do modo minimalista.
+     O JS usa style.display='flex' (inline) para exibi-lo dentro do modo minimalista,
+     sobrescrevendo o seletor > * { display:none } que não tem !important. */
   position: absolute;
   bottom: calc(100% + 12px);
   left: 50%;
@@ -1260,7 +1264,6 @@ body.is-pip-mode .btn-toggle-size {
   border: 1px solid var(--border, #e5e7eb);
   border-radius: 20px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
-  display: flex;
   flex-direction: column;
   overflow: hidden;
   z-index: 200;
@@ -1344,59 +1347,6 @@ body.is-pip-mode .btn-toggle-size {
 /* MODO ULTRA COMPACTO — Novos controles do widget                  */
 /* ================================================================ */
 
-/* --- Puxador de Arrasto (Drag Handle) --- */
-.dock-drag-handle {
-    display: none;             /* Oculto fora do ultra compacto */
-    cursor: grab;
-    color: var(--text-muted);
-    padding: 6px 8px;
-    align-items: center;
-    justify-content: center;
-    border-radius: 8px;
-    transition: background 0.2s, color 0.2s;
-    flex-shrink: 0;
-}
-
-.dock-drag-handle:hover {
-    background: #f3f4f6;
-    color: var(--text-main);
-}
-
-.dock-drag-handle:active {
-    cursor: grabbing;
-}
-
-/* Aparece somente no modo ultra compacto */
-.container.minimalist-mode .dock-drag-handle {
-    display: flex;
-}
-
-/* --- Botão Sair do Ultra Compacto --- */
-.btn-exit-minimalist {
-    display: none;             /* Oculto fora do ultra compacto */
-    background: transparent;
-    border: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    padding: 8px;
-    margin-left: 4px;
-    border-radius: 50%;
-    transition: background 0.2s, color 0.2s;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-
-.btn-exit-minimalist:hover {
-    background: #fee2e2;
-    color: var(--c-clear);
-}
-
-/* Aparece somente no modo ultra compacto */
-.container.minimalist-mode .btn-exit-minimalist {
-    display: flex;
-}
-
 /* --- Botões do Footer do Popover (inclui o novo Jurídico) --- */
 .popover-footer .btn-action {
     flex: 1;
@@ -1424,17 +1374,16 @@ body.is-pip-mode .btn-toggle-size {
 
 /* --- Estado visual dos botões no Ultra Compacto --- */
 /* Sobrescreve o btn-mic no minimalist para remover flex:1.5 herdado */
-.container.minimalist-mode .control-dock #micBtn,
-.container.minimalist-mode .control-dock #aiFixBtn {
+.container.minimalist-mode .control-dock #micBtn {
     flex: 0 0 auto;
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
     padding: 0;
     border-radius: 50%;
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
 }
 
-.container.minimalist-mode .control-dock #micBtn {
-    width: 50px;
-    height: 50px;
-    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+.container.minimalist-mode .control-dock #micBtn svg {
+    width: 18px;
+    height: 18px;
 }
