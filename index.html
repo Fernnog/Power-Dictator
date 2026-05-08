@@ -99,16 +99,7 @@
         <div id="statusMsg" class="status-bar"></div>
 
         <div class="control-dock" data-minimalist-visible id="mainDock">
-
-            <!-- [NOVO] Puxador de arrasto — visível apenas no modo ultra compacto -->
-            <div id="dragHandle" class="dock-drag-handle" title="Mover widget" aria-hidden="true">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="9" cy="5" r="1"/><circle cx="15" cy="5" r="1"/>
-                    <circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/>
-                    <circle cx="9" cy="19" r="1"/><circle cx="15" cy="19" r="1"/>
-                </svg>
-            </div>
-            
+                      
             <div class="engine-selector-container" data-tooltip="Alternar Motor de Voz">
                 <label class="toggle-switch">
                     <input type="checkbox" id="engineToggle">
@@ -175,16 +166,17 @@
         <button
           id="toggleMinimalistBtn"
           class="btn-toggle-size"
-          title="Alternar Modo Minimalista"
+          title="Ativar Modo Ultra Minimalista"
           aria-pressed="false"
           aria-label="Ativar modo minimalista"
           style="right: 112px;" 
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <polyline points="4 14 10 14 10 20"></polyline>
-            <polyline points="20 10 14 10 14 4"></polyline>
-            <line x1="10" y1="14" x2="21" y2="3"></line>
-            <line x1="3" y1="21" x2="14" y2="10"></line>
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M3 7V5a2 2 0 0 1 2-2h2"></path>
+            <path d="M17 3h2a2 2 0 0 1 2 2v2"></path>
+            <path d="M21 17v2a2 2 0 0 1-2 2h-2"></path>
+            <path d="M7 21H5a2 2 0 0 1-2-2v-2"></path>
           </svg>
         </button>
 
