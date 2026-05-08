@@ -1055,7 +1055,7 @@ body.show-install-btn .btn-install-pwa {
 /* Aplicado ao body da JANELA PiP pelo JavaScript  */
 /* -----------------------------------------------  */
 body.is-pip-mode {
-    background-color: transparent;
+    background-color: var(--bg-app); /* Corrige a tela preta herdada do OS */
     margin: 0;
     padding: 0;
     overflow: hidden;
@@ -1186,17 +1186,19 @@ body.is-pip-mode .btn-toggle-size {
 /* ================================================================ */
 
 .container.minimalist-mode {
-  position: relative;
+  position: fixed;          /* FIXED — relativo ao viewport, não ao body com overflow:hidden */
   width: auto;
   min-width: 0;
   height: auto;
-  padding: 10px;
+  padding: 0;               /* O dock controla seu próprio espaçamento interno */
   background: transparent;
   box-shadow: none;
   border: none;
   display: flex;
   justify-content: center;
   align-items: center;
+  z-index: 9999;            /* Flutua acima de modais (1000) e toasts (1000) */
+  transition: none;         /* Desativado: evita lag durante o arrasto */
 }
 
 .container.minimalist-mode > * {
@@ -1218,8 +1220,14 @@ body.is-pip-mode .btn-toggle-size {
   justify-content: center;
 }
 
-.container.minimalist-mode .control-dock > *:not(#micBtn):not(#aiFixBtn) {
-  display: none;
+/* Oculta tudo no dock, exceto os controles essenciais do widget */
+.container.minimalist-mode .control-dock > *:not(#micBtn):not(#aiFixBtn):not(#dragHandle):not(#exitMinimalistBtn) {
+  display: none !important;
+}
+
+/* Garante que textos dos botões não apareçam no widget */
+.container.minimalist-mode .control-dock .btn-action span {
+  display: none !important;
 }
 
 .btn-action.state-muted {
@@ -1330,4 +1338,103 @@ body.is-pip-mode .btn-toggle-size {
   background: var(--bg-app, #f9fafb);
   border-top: 1px solid var(--border, #e5e7eb);
   flex-shrink: 0;
+}
+
+/* ================================================================ */
+/* MODO ULTRA COMPACTO — Novos controles do widget                  */
+/* ================================================================ */
+
+/* --- Puxador de Arrasto (Drag Handle) --- */
+.dock-drag-handle {
+    display: none;             /* Oculto fora do ultra compacto */
+    cursor: grab;
+    color: var(--text-muted);
+    padding: 6px 8px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    transition: background 0.2s, color 0.2s;
+    flex-shrink: 0;
+}
+
+.dock-drag-handle:hover {
+    background: #f3f4f6;
+    color: var(--text-main);
+}
+
+.dock-drag-handle:active {
+    cursor: grabbing;
+}
+
+/* Aparece somente no modo ultra compacto */
+.container.minimalist-mode .dock-drag-handle {
+    display: flex;
+}
+
+/* --- Botão Sair do Ultra Compacto --- */
+.btn-exit-minimalist {
+    display: none;             /* Oculto fora do ultra compacto */
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 8px;
+    margin-left: 4px;
+    border-radius: 50%;
+    transition: background 0.2s, color 0.2s;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.btn-exit-minimalist:hover {
+    background: #fee2e2;
+    color: var(--c-clear);
+}
+
+/* Aparece somente no modo ultra compacto */
+.container.minimalist-mode .btn-exit-minimalist {
+    display: flex;
+}
+
+/* --- Botões do Footer do Popover (inclui o novo Jurídico) --- */
+.popover-footer .btn-action {
+    flex: 1;
+    padding: 10px 8px;
+    border-radius: 10px;
+    box-shadow: none;
+}
+
+/* Ícones only: sem texto no rodapé do balão */
+.popover-footer .btn-action span {
+    display: none;
+}
+
+/* --- Popover Invertido (quando widget está no topo da tela) --- */
+.minimalist-popover.popover-flipped {
+    bottom: auto;
+    top: calc(100% + 12px);
+    animation: popoverEnterFlipped 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes popoverEnterFlipped {
+    from { opacity: 0; transform: translateX(-50%) scale(0.88) translateY(-10px); }
+    to   { opacity: 1; transform: translateX(-50%) scale(1) translateY(0); }
+}
+
+/* --- Estado visual dos botões no Ultra Compacto --- */
+/* Sobrescreve o btn-mic no minimalist para remover flex:1.5 herdado */
+.container.minimalist-mode .control-dock #micBtn,
+.container.minimalist-mode .control-dock #aiFixBtn {
+    flex: 0 0 auto;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border-radius: 50%;
+}
+
+.container.minimalist-mode .control-dock #micBtn {
+    width: 50px;
+    height: 50px;
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
 }
