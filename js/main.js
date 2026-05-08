@@ -87,7 +87,7 @@ function isInFloatingWindow() {
 /**
  * Estado Mic → Estado Ação.
  * Ativado quando a transcrição retorna texto.
- * No Caminho B (window.open), redimensiona a janela popup para 360×500.
+ * No Caminho B (window.open), redimensiona a janela popup para 420×550.
  * No Caminho A (PiP), apenas troca as classes — sem resizeTo().
  */
 function transitionToActionState() {
@@ -96,11 +96,11 @@ function transitionToActionState() {
     ui.container.classList.remove('minimalist-mode');
     ui.container.classList.add('minimized');
 
-    // Redimensionamento apenas para o Caminho B (window.open)
-    // O Document PiP não suporta resizeTo() — transição é 100% CSS
+    // Redimensionamento apenas para o Caminho B (window.open).
+    // O Document PiP não suporta resizeTo() — a transição é 100% CSS.
     if (activeExternalWindow) {
         try {
-            const W = 360, H = 500;
+            const W = 420, H = 550;
             activeExternalWindow.resizeTo(W, H);
             const screenLeft = activeExternalWindow.screen.availLeft || 0;
             const screenTop  = activeExternalWindow.screen.availTop  || 0;
@@ -120,7 +120,7 @@ function transitionToActionState() {
 /**
  * Estado Ação → Estado Mic.
  * Ativado pelo botão "Limpar". Só executa dentro de uma janela flutuante.
- * No Caminho B, encolhe a janela de volta para 140×140.
+ * No Caminho B, encolhe a janela de volta para 110×110.
  */
 function transitionToMicState() {
     if (!isInFloatingWindow()) return;
@@ -129,10 +129,10 @@ function transitionToMicState() {
     ui.container.classList.remove('minimized');
     ui.container.classList.add('minimalist-mode');
 
-    // Redimensionamento apenas para o Caminho B (window.open)
+    // Redimensionamento apenas para o Caminho B (window.open).
     if (activeExternalWindow) {
         try {
-            const W = 140, H = 140;
+            const W = 110, H = 110;
             activeExternalWindow.resizeTo(W, H);
             const screenLeft = activeExternalWindow.screen.availLeft || 0;
             const screenTop  = activeExternalWindow.screen.availTop  || 0;
@@ -366,20 +366,25 @@ ui.btnAiFix.addEventListener('click', () => {
 
     executeSafely(async () => {
         stopVisualEffects();
-        ui.btnAiFix.classList.add('pulsing'); 
+        ui.btnAiFix.classList.add('pulsing');
         updateStatus('processing');
         try {
             const result = await aiService.fixGrammar(text);
             ui.textarea.value = result;
             saveContent();
-            updateStatus('success');
-            showPopoverIfMinimalist();
+            // Limpa "PROCESSANDO IA..." imediatamente após o sucesso.
+            // NOTA: updateStatus('success') foi removido pois não é um estado
+            // reconhecido pela função — causava limpeza imediata de qualquer forma.
+            // A linha showPopoverIfMinimalist() foi REMOVIDA: era a causa do
+            // ReferenceError que gerava o alerta falso de "Erro na IA".
+            updateStatus('');
         } catch (error) {
+            // Este catch agora só captura erros reais da API de IA.
             alert("Erro na IA (Llama/Groq): " + error.message);
             updateStatus('error');
+            setTimeout(() => updateStatus(''), 2000);
         } finally {
-            ui.btnAiFix.classList.remove('pulsing'); 
-            setTimeout(() => updateStatus('idle'), 2000);
+            ui.btnAiFix.classList.remove('pulsing');
         }
     });
 });
@@ -726,8 +731,12 @@ window.addEventListener('DOMContentLoaded', () => {
                     // No Estado Mic, o CSS .minimalist-mode centraliza apenas o
                     // botão de microfone, preenchendo o restante com --bg-app.
                     const pipWindow = await documentPictureInPicture.requestWindow({
-                        width: 360,
-                        height: 500,
+                        // IMPORTANTE: A API PiP do Chrome bloqueia resizeTo() por segurança.
+                        // A janela deve ser aberta já no tamanho máximo necessário (Estado Ação).
+                        // No Estado Mic, o CSS .minimalist-mode centraliza o botão de microfone
+                        // e preenche o restante com a cor de fundo da aplicação.
+                        width: 420,
+                        height: 550,
                         disallowReturnToOpener: false
                     });
 
@@ -782,9 +791,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
         } else {
             // ── CAMINHO B: window.open (fallback) ────────────────
-            // Abre pequeno (140×140). resizeTo() funciona em popups convencionais.
+            // Abre pequeno (110×110) no Estado Mic inicial.
+            // resizeTo() funciona normalmente em popups window.open convencionais.
             ui.popOutBtn.addEventListener('click', () => {
-                const W = 140, H = 140;
+                const W = 110, H = 110;
                 const screenLeft = window.screen.availLeft || 0;
                 const screenTop  = window.screen.availTop  || 0;
                 const left = (screenLeft + window.screen.availWidth)  - W - 16;
