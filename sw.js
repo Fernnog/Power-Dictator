@@ -1,4 +1,4 @@
-const CACHE_NAME = 'power-dictator-cache-v1.1.2';
+const CACHE_NAME = 'power-dictator-cache-v1.2.0';
 
 const ASSETS_TO_CACHE = [
   './',
@@ -11,7 +11,6 @@ const ASSETS_TO_CACHE = [
   './js/speech-manager.js',
   './js/hotkeys.js',
   './js/glossary.js',
-  './js/changelog.js',
   './manifest.json'
   // app.html removido — não existe mais
 ];
