@@ -98,7 +98,7 @@
 
         <div id="statusMsg" class="status-bar"></div>
 
-        <div class="control-dock">
+        <div class="control-dock" data-minimalist-visible>
             
             <div class="engine-selector-container" data-tooltip="Alternar Motor de Voz">
                 <label class="toggle-switch">
@@ -150,6 +150,61 @@
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                 <span>Limpar</span>
             </button>
+        </div>
+
+        <!-- ================================================ -->
+        <!-- BOTÃO DE TOGGLE: MODO MINIMALISTA                 -->
+        <!-- ================================================ -->
+        <button
+          id="toggleMinimalistBtn"
+          class="btn-toggle-size"
+          title="Alternar Modo Minimalista"
+          aria-pressed="false"
+          aria-label="Ativar modo minimalista"
+          style="right: 80px;" 
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="4 14 10 14 10 20"></polyline>
+            <polyline points="20 10 14 10 14 4"></polyline>
+            <line x1="10" y1="14" x2="21" y2="3"></line>
+            <line x1="3" y1="21" x2="14" y2="10"></line>
+          </svg>
+        </button>
+
+        <!-- ================================================ -->
+        <!-- POPOVER: BALÃO DINÂMICO DE RESULTADO             -->
+        <!-- ================================================ -->
+        <div
+          id="minimalistPopover"
+          class="minimalist-popover"
+          role="dialog"
+          aria-modal="false"
+          aria-label="Texto processado"
+          aria-hidden="true"
+          hidden
+        >
+          <div class="popover-header">
+            <span class="popover-title" id="popoverTitle">Texto Processado</span>
+            <button id="closePopoverBtn" class="btn-close-popover" aria-label="Fechar painel de resultado" title="Fechar">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+
+          <div class="popover-body">
+            <textarea id="popoverTextArea" aria-labelledby="popoverTitle" aria-multiline="true"></textarea>
+          </div>
+
+          <div class="popover-footer">
+            <button id="popoverCopyBtn" class="btn-action btn-copy" data-tooltip="Copiar Texto" aria-label="Copiar texto" title="Copiar">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            </button>
+            <button id="popoverClearBtn" class="btn-action btn-clear" data-tooltip="Limpar" aria-label="Limpar texto" title="Limpar">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+            </button>
+          </div>
         </div>
 
     </div>
