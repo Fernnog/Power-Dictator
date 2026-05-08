@@ -100,7 +100,7 @@ function transitionToActionState() {
     // O Document PiP não suporta resizeTo() — a transição é 100% CSS.
     if (activeExternalWindow) {
         try {
-            const W = 420, H = 550;
+            const { ACTION_W: W, ACTION_H: H } = CONFIG.UI.WINDOW;
             activeExternalWindow.resizeTo(W, H);
             const screenLeft = activeExternalWindow.screen.availLeft || 0;
             const screenTop  = activeExternalWindow.screen.availTop  || 0;
@@ -132,7 +132,7 @@ function transitionToMicState() {
     // Redimensionamento apenas para o Caminho B (window.open).
     if (activeExternalWindow) {
         try {
-            const W = 110, H = 110;
+            const { MIC_W: W, MIC_H: H } = CONFIG.UI.WINDOW;
             activeExternalWindow.resizeTo(W, H);
             const screenLeft = activeExternalWindow.screen.availLeft || 0;
             const screenTop  = activeExternalWindow.screen.availTop  || 0;
@@ -735,8 +735,8 @@ window.addEventListener('DOMContentLoaded', () => {
                         // A janela deve ser aberta já no tamanho máximo necessário (Estado Ação).
                         // No Estado Mic, o CSS .minimalist-mode centraliza o botão de microfone
                         // e preenche o restante com a cor de fundo da aplicação.
-                        width: 420,
-                        height: 550,
+                        width: CONFIG.UI.WINDOW.PIP_W,
+                        height: CONFIG.UI.WINDOW.PIP_H,
                         disallowReturnToOpener: false
                     });
 
@@ -794,7 +794,7 @@ window.addEventListener('DOMContentLoaded', () => {
             // Abre pequeno (110×110) no Estado Mic inicial.
             // resizeTo() funciona normalmente em popups window.open convencionais.
             ui.popOutBtn.addEventListener('click', () => {
-                const W = 110, H = 110;
+                const { MIC_W: W, MIC_H: H } = CONFIG.UI.WINDOW;
                 const screenLeft = window.screen.availLeft || 0;
                 const screenTop  = window.screen.availTop  || 0;
                 const left = (screenLeft + window.screen.availWidth)  - W - 16;
