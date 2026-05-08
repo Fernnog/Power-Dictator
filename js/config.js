@@ -29,6 +29,14 @@ export const CONFIG = {
         TOGGLE_MODE: 'KeyM'
     },
     UI: {
-        TOAST_DURATION: 5000
+        TOAST_DURATION: 5000,
+        WINDOW: {
+            MIC_W: 100,
+            MIC_H: 100,
+            ACTION_W: 380,
+            ACTION_H: 450,
+            PIP_W: 380,
+            PIP_H: 450
+        }
     }
 };
