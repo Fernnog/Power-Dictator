@@ -1029,6 +1029,7 @@ body.is-pip-mode {
     margin: 0;
     padding: 0;
     overflow: hidden;
+    transition: background-color 0.3s ease;
 }
 
 body.is-pip-mode .container {
@@ -1189,7 +1190,9 @@ body.is-pip-mode .btn-toggle-size {
 .container.minimalist-mode .control-dock {
     background: var(--bg-card, #ffffff);
     border-radius: 50%;
-    padding: 6px;
+    padding: 4px;
+    width: 66px;
+    height: 66px;
     gap: 0;
     box-shadow: 0 8px 28px rgba(79, 70, 229, 0.25);
     border: 1px solid var(--border, #e5e7eb);
