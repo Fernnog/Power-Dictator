@@ -67,7 +67,9 @@ const ui = {
     closePopoverBtn:     document.getElementById('closePopoverBtn'),
     popoverTextArea:     document.getElementById('popoverTextArea'),
     popoverCopyBtn:      document.getElementById('popoverCopyBtn'),
-    popoverClearBtn:     document.getElementById('popoverClearBtn')
+    popoverClearBtn:     document.getElementById('popoverClearBtn'),
+    popoverLegalBtn:     document.getElementById('popoverLegalBtn'),  // [NOVO]
+    exitMinimalistBtn:   document.getElementById('exitMinimalistBtn') // [NOVO]
 };
 
 // Variáveis de Estado
@@ -94,27 +96,58 @@ function updateMinimalistButtonStates(activeKey = null) {
   });
 }
 
-function showPopoverIfMinimalist() {
-  if (!ui.container.classList.contains('minimalist-mode')) return;
-  const content = ui.textarea.value.trim();
-  if (!content) return;
-
-  ui.popoverTextArea.value = content;
-  ui.popoverTextArea.style.height = 'auto';
-  ui.popoverTextArea.style.height = ui.popoverTextArea.scrollHeight + 'px';
-
-  ui.minimalistPopover.hidden = false;
-  ui.minimalistPopover.setAttribute('aria-hidden', 'false');
-
-  ui.minimalistPopover.style.animation = 'none';
-  void ui.minimalistPopover.offsetWidth;
-  ui.minimalistPopover.style.animation = '';
+/**
+ * Atualiza a direção do popover com base na posição vertical do widget.
+ * Inverte para baixo se o widget estiver na metade superior da tela,
+ * evitando que o balão saia do viewport.
+ * @param {number} widgetTop - Coordenada Y do topo do widget (em px)
+ */
+function updatePopoverFlip(widgetTop) {
+    if (!ui.minimalistPopover || ui.minimalistPopover.hidden) return;
+    const isNearTop = widgetTop < window.innerHeight / 2;
+    ui.minimalistPopover.classList.toggle('popover-flipped', isNearTop);
 }
 
+/**
+ * Exibe o popover com o texto atual, mas somente no modo ultra compacto.
+ * Usa style.display diretamente para contornar a regra CSS
+ * `.container.minimalist-mode > * { display: none }` que tem
+ * especificidade maior que a classe .minimalist-popover.
+ */
+function showPopoverIfMinimalist() {
+    if (!ui.container.classList.contains('minimalist-mode')) return;
+    const content = ui.textarea.value.trim();
+    if (!content) return;
+
+    ui.popoverTextArea.value = content;
+    ui.popoverTextArea.style.height = 'auto';
+    ui.popoverTextArea.style.height = Math.min(ui.popoverTextArea.scrollHeight, 200) + 'px';
+
+    // Forçamos display via style inline (especificidade máxima) para sobrepor
+    // o seletor > * { display: none } do modo minimalist.
+    ui.minimalistPopover.hidden = false;
+    ui.minimalistPopover.style.display = 'flex';
+    ui.minimalistPopover.setAttribute('aria-hidden', 'false');
+
+    // Reaplica a animação de entrada
+    ui.minimalistPopover.style.animation = 'none';
+    void ui.minimalistPopover.offsetWidth; // reflow
+    ui.minimalistPopover.style.animation = '';
+
+    // Verifica se deve inverter a direção do popover
+    const rect = ui.container.getBoundingClientRect();
+    updatePopoverFlip(rect.top);
+}
+
+/**
+ * Fecha o popover e devolve o foco a um elemento opcional.
+ */
 function closePopover(returnFocusTo = null) {
-  ui.minimalistPopover.hidden = true;
-  ui.minimalistPopover.setAttribute('aria-hidden', 'true');
-  if (returnFocusTo) returnFocusTo.focus();
+    ui.minimalistPopover.hidden = true;
+    ui.minimalistPopover.style.display = ''; // Limpa o forçamento inline
+    ui.minimalistPopover.setAttribute('aria-hidden', 'true');
+    ui.minimalistPopover.classList.remove('popover-flipped');
+    if (returnFocusTo) returnFocusTo.focus();
 }
 
 // ========================================================
@@ -815,64 +848,238 @@ if (ui.installPwaBtn) {
 }
 
 // ============================================================
-// EVENT LISTENERS — MODO MINIMALISTA
+// MODO MINIMALIST — Máquina de Estados e Navegação
 // ============================================================
 
-if (ui.toggleMinimalistBtn) {
-  ui.toggleMinimalistBtn.addEventListener('click', () => {
-    const isEntering = !ui.container.classList.contains('minimalist-mode');
-    ui.container.classList.toggle('minimalist-mode');
-
-    ui.toggleMinimalistBtn.setAttribute('aria-pressed', String(isEntering));
-    ui.toggleMinimalistBtn.setAttribute(
-      'aria-label',
-      isEntering ? 'Desativar modo minimalista' : 'Ativar modo minimalista'
-    );
+/**
+ * Ponto único de controle do modo ultra compacto.
+ * Garante que a navegação nunca passe pelo modo `.minimized`.
+ *
+ * @param {boolean} forceExit - true para forçar a saída, independente do estado.
+ */
+function toggleMinimalistMode(forceExit = false) {
+    const isCurrentlyMinimalist = ui.container.classList.contains('minimalist-mode');
+    const isEntering = !forceExit && !isCurrentlyMinimalist;
 
     if (isEntering) {
-      updateMinimalistButtonStates(null);
-      showPopoverIfMinimalist();
+        // Se o modo compacto (.minimized) estiver ativo, remova-o antes
+        // sem chamar setUIMode(), que dispararia window.resizeTo() desnecessariamente.
+        if (ui.container.classList.contains('minimized')) {
+            ui.container.classList.remove('minimized');
+            const iconMinimize = ui.container.querySelector('#iconMinimize');
+            const iconMaximize = ui.container.querySelector('#iconMaximize');
+            if (iconMinimize) iconMinimize.classList.remove('icon-hidden');
+            if (iconMaximize) iconMaximize.classList.add('icon-hidden');
+        }
+
+        ui.container.classList.add('minimalist-mode');
+
+        // Posiciona o widget no centro do viewport após o próximo frame de renderização,
+        // garantindo que as dimensões do dock já foram calculadas pelo browser.
+        requestAnimationFrame(() => {
+            const rect = ui.container.getBoundingClientRect();
+            const centerX = Math.round((window.innerWidth  - rect.width)  / 2);
+            const centerY = Math.round((window.innerHeight - rect.height) / 2);
+            ui.container.style.left = centerX + 'px';
+            ui.container.style.top  = centerY + 'px';
+        });
+
+        if (ui.toggleMinimalistBtn) {
+            ui.toggleMinimalistBtn.setAttribute('aria-pressed', 'true');
+            ui.toggleMinimalistBtn.setAttribute('aria-label', 'Desativar modo minimalista');
+        }
+
+        updateMinimalistButtonStates(null);
+        showPopoverIfMinimalist();
+
     } else {
-      updateMinimalistButtonStates(null);
-      closePopover(ui.toggleMinimalistBtn);
+        // Sai do ultra compacto e volta DIRETAMENTE ao modo expandido
+        ui.container.classList.remove('minimalist-mode');
+
+        // Limpa as coordenadas de posição definidas pelo drag
+        ui.container.style.left      = '';
+        ui.container.style.top       = '';
+        ui.container.style.transform = '';
+
+        closePopover();
+        updateMinimalistButtonStates(null);
+
+        if (ui.toggleMinimalistBtn) {
+            ui.toggleMinimalistBtn.setAttribute('aria-pressed', 'false');
+            ui.toggleMinimalistBtn.setAttribute('aria-label', 'Ativar modo minimalista');
+        }
     }
-  });
 }
 
+// Botão de entrada (modo expandido → ultra compacto)
+if (ui.toggleMinimalistBtn) {
+    ui.toggleMinimalistBtn.addEventListener('click', () => toggleMinimalistMode());
+}
+
+// Botão de saída dentro do dock do widget (ultra compacto → expandido)
+if (ui.exitMinimalistBtn) {
+    ui.exitMinimalistBtn.addEventListener('click', () => toggleMinimalistMode(true));
+}
+
+// ============================================================
+// DRAG & DROP DO WIDGET MINIMALIST — Pointer Events API
+// Funciona com mouse, touch e caneta stylus.
+// setPointerCapture garante que eventos continuem chegando
+// mesmo quando o ponteiro sai da área do elemento.
+// ============================================================
+(function initWidgetDrag() {
+    const dragHandle = document.getElementById('dragHandle');
+    if (!dragHandle) return;
+
+    let isDragging    = false;
+    let startPointerX = 0;
+    let startPointerY = 0;
+    let startContainerX = 0;
+    let startContainerY = 0;
+
+    dragHandle.addEventListener('pointerdown', (e) => {
+        // Somente botão principal (esquerdo) em mouse; qualquer toque em touch
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        e.preventDefault();
+
+        // Captura o ponteiro: eventos continuam chegando mesmo fora do elemento
+        dragHandle.setPointerCapture(e.pointerId);
+        isDragging = true;
+
+        // Ponto de partida do ponteiro
+        startPointerX = e.clientX;
+        startPointerY = e.clientY;
+
+        // Posição atual do widget (via getBoundingClientRect para precisão)
+        const rect = ui.container.getBoundingClientRect();
+        startContainerX = rect.left;
+        startContainerY = rect.top;
+
+        // Desativa transições durante o drag para resposta imediata
+        ui.container.style.transition = 'none';
+        dragHandle.style.cursor = 'grabbing';
+    });
+
+    dragHandle.addEventListener('pointermove', (e) => {
+        if (!isDragging) return;
+        e.preventDefault();
+
+        const deltaX = e.clientX - startPointerX;
+        const deltaY = e.clientY - startPointerY;
+
+        let newX = startContainerX + deltaX;
+        let newY = startContainerY + deltaY;
+
+        // Limita o widget dentro dos limites do viewport
+        const rect = ui.container.getBoundingClientRect();
+        newX = Math.max(0, Math.min(newX, window.innerWidth  - rect.width));
+        newY = Math.max(0, Math.min(newY, window.innerHeight - rect.height));
+
+        ui.container.style.left = newX + 'px';
+        ui.container.style.top  = newY + 'px';
+
+        // Atualiza a direção do popover conforme a posição vertical
+        updatePopoverFlip(newY);
+    });
+
+    function endDrag() {
+        if (!isDragging) return;
+        isDragging = false;
+        dragHandle.style.cursor = '';
+        // Reativa a transição (somente propriedades que não sejam left/top
+        // para não criar animação no próximo drag)
+        ui.container.style.transition = '';
+    }
+
+    dragHandle.addEventListener('pointerup',     endDrag);
+    dragHandle.addEventListener('pointercancel', endDrag);
+})();
+
+// ============================================================
+// POPOVER — Listeners de interação
+// ============================================================
+
+// Fechar o popover pelo botão X
 if (ui.closePopoverBtn) {
-  ui.closePopoverBtn.addEventListener('click', () => {
-    closePopover(minimalistButtons?.lastActive || ui.toggleMinimalistBtn);
-  });
+    ui.closePopoverBtn.addEventListener('click', () => {
+        closePopover(ui.toggleMinimalistBtn);
+    });
 }
 
+// Fechar o popover com Escape
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && ui.minimalistPopover && !ui.minimalistPopover.hidden) {
-    closePopover(ui.toggleMinimalistBtn);
-  }
+    if (e.key === 'Escape' && ui.minimalistPopover && !ui.minimalistPopover.hidden) {
+        closePopover(ui.toggleMinimalistBtn);
+    }
 });
 
-if (ui.popoverCopyBtn) {
-  ui.popoverCopyBtn.addEventListener('click', () => {
-    if (ui.btnCopy) ui.btnCopy.click();
-    ui.popoverCopyBtn.classList.add('status-success');
-    setTimeout(() => {
-      ui.popoverCopyBtn.classList.remove('status-success');
-    }, 1500);
-  });
-}
-
-if (ui.popoverClearBtn) {
-  ui.popoverClearBtn.addEventListener('click', () => {
-    if (ui.btnClear) ui.btnClear.click();
-    ui.popoverTextArea.value = '';
-    closePopover(ui.toggleMinimalistBtn);
-  });
-}
-
+// Sincronização bidirecional: edição no popover atualiza a textarea principal
 if (ui.popoverTextArea) {
-  ui.popoverTextArea.addEventListener('input', () => {
-    ui.textarea.value = ui.popoverTextArea.value;
-    ui.popoverTextArea.style.height = 'auto';
-    ui.popoverTextArea.style.height = ui.popoverTextArea.scrollHeight + 'px';
-  });
+    ui.popoverTextArea.addEventListener('input', () => {
+        ui.textarea.value = ui.popoverTextArea.value;
+        ui.popoverTextArea.style.height = 'auto';
+        ui.popoverTextArea.style.height = Math.min(ui.popoverTextArea.scrollHeight, 200) + 'px';
+    });
+}
+
+// Copiar texto via popover
+if (ui.popoverCopyBtn) {
+    ui.popoverCopyBtn.addEventListener('click', () => {
+        if (ui.btnCopy) ui.btnCopy.click();
+        ui.popoverCopyBtn.classList.add('pulsing');
+        setTimeout(() => ui.popoverCopyBtn.classList.remove('pulsing'), 1200);
+    });
+}
+
+// Limpar texto via popover
+if (ui.popoverClearBtn) {
+    ui.popoverClearBtn.addEventListener('click', () => {
+        if (ui.btnClear) ui.btnClear.click();
+        ui.popoverTextArea.value = '';
+        closePopover(ui.toggleMinimalistBtn);
+    });
+}
+
+// ============================================================
+// POPOVER — Ação Jurídica com ciclo assíncrono completo
+// Não usa ui.btnAiLegal.click() para evitar efeitos colaterais
+// do executeSafely (como parar gravação). Chama o serviço diretamente.
+// ============================================================
+if (ui.popoverLegalBtn) {
+    ui.popoverLegalBtn.addEventListener('click', async () => {
+        // 1. Sincroniza a edição do popover de volta à textarea principal
+        ui.textarea.value = ui.popoverTextArea.value;
+        const text = ui.textarea.value.trim();
+        if (!text) return;
+
+        // 2. Feedback visual de início do processamento
+        ui.popoverLegalBtn.classList.add('pulsing');
+        ui.popoverLegalBtn.disabled = true;
+        updateStatus('processing');
+
+        try {
+            // 3. Chama o serviço de IA diretamente
+            const result = await aiService.convertToLegal(text);
+
+            // 4. Atualiza AMBAS as áreas de texto com o resultado
+            ui.textarea.value        = result;
+            ui.popoverTextArea.value = result;
+
+            // Recalcula a altura do textarea do popover para o novo conteúdo
+            ui.popoverTextArea.style.height = 'auto';
+            ui.popoverTextArea.style.height = Math.min(ui.popoverTextArea.scrollHeight, 200) + 'px';
+
+            saveContent();
+            updateStatus('success');
+            setTimeout(() => updateStatus('idle'), 2000);
+
+        } catch (error) {
+            alert('Erro na conversão jurídica (Groq): ' + error.message);
+            updateStatus('error');
+        } finally {
+            // 5. Feedback visual de fim — sempre executado
+            ui.popoverLegalBtn.classList.remove('pulsing');
+            ui.popoverLegalBtn.disabled = false;
+        }
+    });
 }
