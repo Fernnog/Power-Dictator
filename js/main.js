@@ -1,9 +1,11 @@
 import { SpeechManager } from './speech-manager.js';
 import { aiService } from './llm-service.js';
-import { changelogData, currentVersion } from './changelog.js';
 import Glossary from './glossary.js';
 import { CONFIG } from './config.js';
 import { HotkeyManager } from './hotkeys.js';
+
+// Referência à janela flutuante (somente para o caminho window.open/fallback)
+let activeExternalWindow = null;
 
 // ========================================================
 // 1. REFERÊNCIAS DE UI (DOM Elements)
@@ -34,11 +36,7 @@ const ui = {
     // Modais e Auxiliares
     toggleSizeBtn: document.getElementById('toggleSizeBtn'),
     container: document.getElementById('appContainer'),
-    versionBtn: document.getElementById('versionBtn'),
     helpBtn: document.getElementById('helpBtn'),
-    changelogModal: document.getElementById('changelogModal'),
-    changelogList: document.getElementById('changelogList'),
-    closeModalBtn: document.getElementById('closeModalBtn'),
     toastContainer: document.getElementById('toastContainer'),
 
     // Glossário
@@ -59,16 +57,7 @@ const ui = {
     dragImage:      document.getElementById('dragImage'),
 
     // [INSERIR] Placeholder de estado do modo PiP
-    pipPlaceholder: document.getElementById('pipPlaceholder'),
-
-    // [NOVO] Elementos do Modo Minimalista
-    toggleMinimalistBtn: document.getElementById('toggleMinimalistBtn'),
-    minimalistPopover:   document.getElementById('minimalistPopover'),
-    closePopoverBtn:     document.getElementById('closePopoverBtn'),
-    popoverTextArea:     document.getElementById('popoverTextArea'),
-    popoverCopyBtn:      document.getElementById('popoverCopyBtn'),
-    popoverClearBtn:     document.getElementById('popoverClearBtn'),
-    popoverLegalBtn:     document.getElementById('popoverLegalBtn')   // [NOVO]
+    pipPlaceholder: document.getElementById('pipPlaceholder')
 };
 
 // Variáveis de Estado
@@ -76,69 +65,84 @@ let undoTimeout = null;
 let tempDeletedText = '';
 
 // ============================================================
-// MODO MINIMALISTA — Configuração e lógica de estado visual
+// GERENCIADOR DE ESTADOS DA JANELA FLUTUANTE
+// Controla as transições entre Estado Mic e Estado Ação.
 // ============================================================
-// Ultra Minimalista: apenas o microfone tem estado visual gerenciado
-function updateMinimalistButtonStates(activeKey = null) {
-  if (!ui.micBtn) return;
-  ui.micBtn.classList.remove('state-muted', 'state-active');
-  if (ui.container.classList.contains('minimalist-mode')) {
-    ui.micBtn.classList.add(activeKey === 'mic' ? 'state-active' : 'state-muted');
-  }
+
+/**
+ * Retorna true se o container estiver atualmente dentro de
+ * uma janela flutuante (PiP ou popup window.open).
+ */
+function isInFloatingWindow() {
+    // Verifica PiP: o container foi movido para o documento da janela PiP
+    const pipWin = (typeof documentPictureInPicture !== 'undefined')
+        ? documentPictureInPicture?.window
+        : null;
+    if (pipWin && pipWin.document === ui.container.ownerDocument) return true;
+    // Verifica popup: esta página foi aberta pelo fallback window.open
+    if (activeExternalWindow) return true;
+    return false;
 }
 
 /**
- * Atualiza a direção do popover com base na posição vertical do widget.
- * Inverte para baixo se o widget estiver na metade superior da tela,
- * evitando que o balão saia do viewport.
- * @param {number} widgetTop - Coordenada Y do topo do widget (em px)
+ * Estado Mic → Estado Ação.
+ * Ativado quando a transcrição retorna texto.
+ * No Caminho B (window.open), redimensiona a janela popup para 360×500.
+ * No Caminho A (PiP), apenas troca as classes — sem resizeTo().
  */
-function updatePopoverFlip(widgetTop) {
-    if (!ui.minimalistPopover || ui.minimalistPopover.hidden) return;
-    const isNearTop = widgetTop < window.innerHeight / 2;
-    ui.minimalistPopover.classList.toggle('popover-flipped', isNearTop);
-}
-
-/**
- * Exibe o popover com o texto atual, mas somente no modo ultra compacto.
- * Usa style.display diretamente para contornar a regra CSS
- * `.container.minimalist-mode > * { display: none }` que tem
- * especificidade maior que a classe .minimalist-popover.
- */
-function showPopoverIfMinimalist() {
+function transitionToActionState() {
     if (!ui.container.classList.contains('minimalist-mode')) return;
-    const content = ui.textarea.value.trim();
-    if (!content) return;
 
-    ui.popoverTextArea.value = content;
-    ui.popoverTextArea.style.height = 'auto';
-    ui.popoverTextArea.style.height = Math.min(ui.popoverTextArea.scrollHeight, 200) + 'px';
+    ui.container.classList.remove('minimalist-mode');
+    ui.container.classList.add('minimized');
 
-    // Forçamos display via style inline (especificidade máxima) para sobrepor
-    // o seletor > * { display: none } do modo minimalist.
-    ui.minimalistPopover.hidden = false;
-    ui.minimalistPopover.style.display = 'flex';
-    ui.minimalistPopover.setAttribute('aria-hidden', 'false');
+    // Redimensionamento apenas para o Caminho B (window.open)
+    // O Document PiP não suporta resizeTo() — transição é 100% CSS
+    if (activeExternalWindow) {
+        try {
+            const W = 360, H = 500;
+            activeExternalWindow.resizeTo(W, H);
+            const screenLeft = activeExternalWindow.screen.availLeft || 0;
+            const screenTop  = activeExternalWindow.screen.availTop  || 0;
+            const left = (screenLeft + activeExternalWindow.screen.availWidth)  - W - 16;
+            const top  = (screenTop  + activeExternalWindow.screen.availHeight) - H - 16;
+            activeExternalWindow.moveTo(left, top);
+        } catch (e) {
+            console.warn('resizeTo para Estado Ação bloqueado:', e);
+        }
+    }
 
-    // Reaplica a animação de entrada
-    ui.minimalistPopover.style.animation = 'none';
-    void ui.minimalistPopover.offsetWidth; // reflow
-    ui.minimalistPopover.style.animation = '';
-
-    // Verifica se deve inverter a direção do popover
-    const rect = ui.container.getBoundingClientRect();
-    updatePopoverFlip(rect.top);
+    requestAnimationFrame(() => {
+        if (ui.textarea) ui.textarea.scrollTop = ui.textarea.scrollHeight;
+    });
 }
 
 /**
- * Fecha o popover e devolve o foco a um elemento opcional.
+ * Estado Ação → Estado Mic.
+ * Ativado pelo botão "Limpar". Só executa dentro de uma janela flutuante.
+ * No Caminho B, encolhe a janela de volta para 140×140.
  */
-function closePopover(returnFocusTo = null) {
-    ui.minimalistPopover.hidden = true;
-    ui.minimalistPopover.style.display = ''; // Limpa o forçamento inline
-    ui.minimalistPopover.setAttribute('aria-hidden', 'true');
-    ui.minimalistPopover.classList.remove('popover-flipped');
-    if (returnFocusTo) returnFocusTo.focus();
+function transitionToMicState() {
+    if (!isInFloatingWindow()) return;
+    if (!ui.container.classList.contains('minimized')) return;
+
+    ui.container.classList.remove('minimized');
+    ui.container.classList.add('minimalist-mode');
+
+    // Redimensionamento apenas para o Caminho B (window.open)
+    if (activeExternalWindow) {
+        try {
+            const W = 140, H = 140;
+            activeExternalWindow.resizeTo(W, H);
+            const screenLeft = activeExternalWindow.screen.availLeft || 0;
+            const screenTop  = activeExternalWindow.screen.availTop  || 0;
+            const left = (screenLeft + activeExternalWindow.screen.availWidth)  - W - 16;
+            const top  = (screenTop  + activeExternalWindow.screen.availHeight) - H - 16;
+            activeExternalWindow.moveTo(left, top);
+        } catch (e) {
+            console.warn('resizeTo para Estado Mic bloqueado:', e);
+        }
+    }
 }
 
 // ========================================================
@@ -247,11 +251,11 @@ const handleTranscriptionResult = (finalText, interimText) => {
         saveContent();
         updateCharCount();
 
-        if (ui.container.classList.contains('minimized')) {
+       if (ui.container.classList.contains('minimized')) {
             ui.textarea.scrollTop = ui.textarea.scrollHeight;
         }
 
-        showPopoverIfMinimalist();
+        transitionToActionState();
     }
 };
 
@@ -260,30 +264,24 @@ const updateStatus = (status) => {
     ui.micBtn.style.backgroundColor = ''; 
 
     if (status === 'starting') {
-        closePopover();                          // Recolhe o balão ao iniciar nova gravação
-        updateMinimalistButtonStates('mic');
         ui.statusMsg.textContent = "CONECTANDO...";
         ui.statusMsg.classList.add('active', 'status-starting');
         ui.micBtn.style.backgroundColor = '#eab308'; 
         ui.micBtn.classList.add('pulsing');
     } else if (status === 'recording') {
-        updateMinimalistButtonStates('mic');
         ui.statusMsg.textContent = "GRAVANDO";
         ui.statusMsg.classList.add('active', 'status-recording');
         ui.micBtn.classList.add('recording', 'pulsing');
     } else if (status === 'processing') {
-        updateMinimalistButtonStates('aifix');
         ui.statusMsg.textContent = "PROCESSANDO IA...";
         ui.statusMsg.classList.add('active', 'status-ai');
     } else if (status === 'error') {
-        updateMinimalistButtonStates(null);
         ui.statusMsg.textContent = "ERRO / BLOQUEADO";
         ui.statusMsg.classList.add('active', 'status-error');
         ui.micBtn.classList.remove('recording');
         stopVisualEffects(); 
         toggleWakeLock(false);
     } else {
-        updateMinimalistButtonStates(null);
         ui.statusMsg.textContent = "";
         ui.statusMsg.classList.remove('active');
         ui.micBtn.classList.remove('recording', 'pulsing'); 
@@ -514,7 +512,15 @@ function handleClearAction() {
     ui.textarea.value = '';
     saveContent();
     updateCharCount();
-    showUndoToast();
+
+    // Toast de desfazer apenas no modo normal
+    // (no modo flutuante não há como exibi-lo de forma confiável)
+    if (!isInFloatingWindow()) {
+        showUndoToast();
+    }
+
+    // Gatilho do ciclo: retorna ao Estado Mic
+    transitionToMicState();
 }
 
 function showUndoToast() {
@@ -601,8 +607,10 @@ function setUIMode(isMinimized) {
     // 3. Redimensionamento da Janela (Aba ou Standalone)
     //    Ignora se estivermos dentro de um contexto PiP, onde o tamanho é fixo.
     const isPip = !!window.documentPictureInPicture?.window;
+    // Evita que setUIMode redimensione quando esta página É o popup flutuante
+    const isOwnPopup = (activeExternalWindow === window);
     
-    if (window.outerWidth && !isPip) {
+    if (window.outerWidth && !isPip && !isOwnPopup) {
         const targetWidth = isMinimized ? 360 : 1080; 
         const targetHeight = isMinimized ? 500 : 800; 
 
@@ -663,21 +671,6 @@ function loadContent() {
     }
 }
 
-ui.versionBtn.addEventListener('click', () => {
-    renderChangelog();
-    ui.changelogModal.style.display = 'flex';
-});
-ui.closeModalBtn.addEventListener('click', () => ui.changelogModal.style.display = 'none');
-
-function renderChangelog() {
-    ui.changelogList.innerHTML = changelogData.map(item => `
-        <div class="version-item">
-            <div class="version-header"><span class="v-num">v${item.version}</span><span class="v-date">${item.date}</span></div>
-            <ul class="v-changes">${item.changes.map(c => `<li>${c}</li>`).join('')}</ul>
-        </div>
-    `).join('');
-}
-
 if (ui.glossaryBtn && ui.glossaryModal) {
     ui.glossaryBtn.addEventListener('click', () => {
         glossaryManager.renderCallback(glossaryManager.getTerms()); 
@@ -693,7 +686,6 @@ if (ui.glossaryBtn && ui.glossaryModal) {
 
 window.addEventListener('DOMContentLoaded', () => {
     loadContent();
-    ui.versionBtn.textContent = `v${currentVersion}`;
     initDeviceSelector();
 
     if (ui.engineToggle) {
@@ -718,16 +710,28 @@ window.addEventListener('DOMContentLoaded', () => {
         document.body.classList.add('is-desktop-tab');
     }
 
-    // POP-OUT WIDGET
+    // ============================================================
+    // MODO COMPACTO — Ponto de entrada único (popOutBtn)
+    // Caminho A: Document Picture-in-Picture (Chrome 116+)
+    // Caminho B: window.open (fallback Firefox/Safari/Edge)
+    // ============================================================
     if (ui.popOutBtn) {
+
         if (_canUsePiP) {
+            // ── CAMINHO A: Document PiP ──────────────────────────
             ui.popOutBtn.addEventListener('click', async () => {
                 try {
+                    // Abre no tamanho do Estado Ação (360×500).
+                    // A API PiP não suporta resizeTo(), então o tamanho é fixo.
+                    // No Estado Mic, o CSS .minimalist-mode centraliza apenas o
+                    // botão de microfone, preenchendo o restante com --bg-app.
                     const pipWindow = await documentPictureInPicture.requestWindow({
                         width: 360,
-                        height: 500
+                        height: 500,
+                        disallowReturnToOpener: false
                     });
 
+                    // Clona todos os estilos da aba principal
                     [...document.styleSheets].forEach((sheet) => {
                         try {
                             const rules = [...sheet.cssRules].map(r => r.cssText).join('');
@@ -737,7 +741,7 @@ window.addEventListener('DOMContentLoaded', () => {
                         } catch (_e) {
                             if (sheet.href) {
                                 const link = pipWindow.document.createElement('link');
-                                link.rel = 'stylesheet';
+                                link.rel  = 'stylesheet';
                                 link.href = sheet.href;
                                 pipWindow.document.head.appendChild(link);
                             }
@@ -745,69 +749,61 @@ window.addEventListener('DOMContentLoaded', () => {
                     });
 
                     pipWindow.document.body.classList.add('is-pip-mode');
+
+                    // Inicia no Estado Mic (apenas microfone visível)
+                    ui.container.classList.remove('minimized');
+                    ui.container.classList.add('minimalist-mode');
+
                     pipWindow.document.body.appendChild(ui.container);
 
-                    if (!ui.container.classList.contains('minimized')) {
-                        ui.container.classList.add('minimized');
-                    }
+                    if (ui.pipPlaceholder) ui.pipPlaceholder.style.display = 'flex';
 
-                    // [INSERIR] Exibe a tela de descanso na aba original
-                    if (ui.pipPlaceholder) {
-                        ui.pipPlaceholder.style.display = 'flex';
-                    }
-
-                    // RESTAURAÇÃO DE ESTADO AO FECHAR PiP
+                    // Restauração ao fechar a janela PiP
                     pipWindow.addEventListener('pagehide', () => {
-                        // [INSERIR] Remove a tela de descanso ao retornar
-                        if (ui.pipPlaceholder) {
-                            ui.pipPlaceholder.style.display = 'none';
-                        }
-                        
-                        // 1. Reattacha o container à janela principal
+                        if (ui.pipPlaceholder) ui.pipPlaceholder.style.display = 'none';
                         document.body.appendChild(ui.container);
-
-                        // 2. Força o retorno ao modo completo via fonte de verdade
-                        setUIMode(false);
-
-                        // 3. Rola para o final do texto após reflow
+                        ui.container.classList.remove('minimalist-mode', 'minimized');
+                        setUIMode(false); // Retorna ao Modo Expandido
                         requestAnimationFrame(() => {
-                            if (ui.textarea) {
-                                ui.textarea.scrollTop = ui.textarea.scrollHeight;
-                            }
+                            if (ui.textarea) ui.textarea.scrollTop = ui.textarea.scrollHeight;
                         });
                     });
 
                 } catch (err) {
                     console.warn('Document PiP bloqueado:', err);
                     ui.statusMsg.textContent = 'Permissão de janela negada pelo navegador.';
-                    ui.statusMsg.className = 'status-bar active status-warning';
+                    ui.statusMsg.className   = 'status-bar active status-warning';
                     setTimeout(() => {
                         ui.statusMsg.textContent = '';
-                        ui.statusMsg.className = 'status-bar';
+                        ui.statusMsg.className   = 'status-bar';
                     }, 4000);
                 }
             });
 
         } else {
+            // ── CAMINHO B: window.open (fallback) ────────────────
+            // Abre pequeno (140×140). resizeTo() funciona em popups convencionais.
             ui.popOutBtn.addEventListener('click', () => {
-                const W = 360;
-                const H = 500;
+                const W = 140, H = 140;
                 const screenLeft = window.screen.availLeft || 0;
                 const screenTop  = window.screen.availTop  || 0;
-                const left = (screenLeft + window.screen.availWidth)  - W - 10;
-                const top  = (screenTop  + window.screen.availHeight) - H - 10;
+                const left = (screenLeft + window.screen.availWidth)  - W - 16;
+                const top  = (screenTop  + window.screen.availHeight) - H - 16;
 
                 window.open(
-                    window.location.pathname + '?mode=compact',
+                    window.location.pathname + '?mode=compact-mic',
                     'DitadoWidget',
-                    `width=${W},height=${H},left=${left},top=${top},popup=yes`
+                    `width=${W},height=${H},left=${left},top=${top},popup=yes,` +
+                    `resizable=yes,scrollbars=no,toolbar=no,menubar=no,status=no`
                 );
             });
         }
     }
 
+    // ── Detecção de contexto via parâmetro URL ────────────────────
     const urlParams = new URLSearchParams(window.location.search);
 
+    // Modo Compacto (antigo): abre como widget com texto + botões
     if (urlParams.get('mode') === 'compact') {
         setTimeout(() => {
             if (!ui.container.classList.contains('minimized')) {
@@ -816,18 +812,14 @@ window.addEventListener('DOMContentLoaded', () => {
         }, 100);
     }
 
-    // Fallback window.open: ativa o modo ultra compacto quando aberto como popup
-    if (urlParams.get('mode') === 'minimalist') {
+    // Modo Compacto Mic: popup do Caminho B, inicia no Estado Mic
+    if (urlParams.get('mode') === 'compact-mic') {
         document.body.classList.add('is-pip-mode');
+        // Define que esta página É a janela flutuante (habilita resizeTo no popup)
+        activeExternalWindow = window;
         setTimeout(() => {
             ui.container.classList.remove('minimized');
             ui.container.classList.add('minimalist-mode');
-
-            // O botão de sair fecha a janela popup diretamente
-            const exitBtn = document.getElementById('exitMinimalistBtn');
-            if (exitBtn) {
-                exitBtn.addEventListener('click', () => window.close());
-            }
         }, 150);
     }
 });
@@ -851,211 +843,6 @@ if (ui.installPwaBtn) {
                 document.body.classList.remove('show-install-btn');
             }
             deferredPrompt = null;
-        }
-    });
-}
-
-// ============================================================
-// MODO ULTRA COMPACTO — Janela Flutuante (fora do navegador)
-// Usa a mesma infraestrutura do modo compacto (popOutBtn):
-// Document Picture-in-Picture API (Chrome 116+) com fallback
-// para window.open em navegadores sem suporte.
-// ============================================================
-
-if (ui.toggleMinimalistBtn) {
-    ui.toggleMinimalistBtn.addEventListener('click', async () => {
-
-        const _canUsePiP = 'documentPictureInPicture' in window;
-
-        // ── CAMINHO 1: Document Picture-in-Picture (Chrome 116+) ──────────
-        if (_canUsePiP) {
-            try {
-                // Dimensões compactas para o widget minimalista
-                // Largura suficiente para 2 botões + drag handle + exit btn
-                const pipWindow = await documentPictureInPicture.requestWindow({
-                    width:  260,
-                    height: 80,
-                    disallowReturnToOpener: false
-                });
-
-                // 1. Clona todos os estilos da aba principal para a janela PiP
-                [...document.styleSheets].forEach((sheet) => {
-                    try {
-                        const rules = [...sheet.cssRules].map(r => r.cssText).join('');
-                        const style = pipWindow.document.createElement('style');
-                        style.textContent = rules;
-                        pipWindow.document.head.appendChild(style);
-                    } catch (_e) {
-                        if (sheet.href) {
-                            const link = pipWindow.document.createElement('link');
-                            link.rel  = 'stylesheet';
-                            link.href = sheet.href;
-                            pipWindow.document.head.appendChild(link);
-                        }
-                    }
-                });
-
-                // 2. Prepara o body da janela PiP
-                pipWindow.document.body.classList.add('is-pip-mode');
-                pipWindow.document.body.style.cssText =
-                    'margin:0; padding:0; background:var(--bg-app,#ffffff); overflow:hidden; display:flex; align-items:center; justify-content:center;';
-
-                // 3. Garante que o modo compacto (.minimized) NÃO esteja ativo
-                //    e aplica somente o modo ultra compacto
-                ui.container.classList.remove('minimized');
-                ui.container.classList.add('minimalist-mode');
-
-                // 4. Move o container para a janela PiP
-                pipWindow.document.body.appendChild(ui.container);
-
-                // 5. Exibe o placeholder na aba principal (reaproveitando o existente)
-                if (ui.pipPlaceholder) {
-                    ui.pipPlaceholder.style.display = 'flex';
-                }
-
-                // 6. Marca o botão como ativo
-                ui.toggleMinimalistBtn.setAttribute('aria-pressed', 'true');
-
-                // ── Restauração ao fechar a janela PiP ──────────────────────
-                pipWindow.addEventListener('pagehide', () => {
-                    // Oculta o placeholder
-                    if (ui.pipPlaceholder) {
-                        ui.pipPlaceholder.style.display = 'none';
-                    }
-
-                    // Devolve o container à aba principal
-                    document.body.appendChild(ui.container);
-
-                    // Remove o modo ultra compacto e garante retorno ao Expandido
-                    ui.container.classList.remove('minimalist-mode');
-                    closePopover();
-                    setUIMode(false); // Força modo expandido (mesma lógica do popOutBtn)
-
-                    ui.toggleMinimalistBtn.setAttribute('aria-pressed', 'false');
-
-                    // Rola para o final do texto após reflow
-                    requestAnimationFrame(() => {
-                        if (ui.textarea) ui.textarea.scrollTop = ui.textarea.scrollHeight;
-                    });
-                });
-                
-            } catch (err) {
-                console.warn('Document PiP (minimalist) bloqueado:', err);
-                ui.statusMsg.textContent = 'Permissão de janela flutuante negada pelo navegador.';
-                ui.statusMsg.className   = 'status-bar active status-warning';
-                setTimeout(() => {
-                    ui.statusMsg.textContent = '';
-                    ui.statusMsg.className   = 'status-bar';
-                }, 4000);
-            }
-
-        // ── CAMINHO 2: window.open (Firefox, Safari, Edge legado) ────────
-        } else {
-            // O popup abre a mesma página com o parâmetro ?mode=minimalist.
-            // A página detecta o parâmetro no DOMContentLoaded e ativa o modo.
-            const W = 260;
-            const H = 90;
-            // Posiciona no canto inferior direito do monitor disponível
-            const screenLeft = window.screen.availLeft || 0;
-            const screenTop  = window.screen.availTop  || 0;
-            const left = (screenLeft + window.screen.availWidth)  - W - 16;
-            const top  = (screenTop  + window.screen.availHeight) - H - 16;
-
-            window.open(
-                window.location.pathname + '?mode=minimalist',
-                'DitadoMiniWidget',
-                `width=${W},height=${H},left=${left},top=${top},popup=yes,` +
-                `resizable=no,scrollbars=no,toolbar=no,menubar=no,status=no`
-            );
-        }
-    });
-}
-
-// ============================================================
-// POPOVER — Listeners de interação
-// ============================================================
-
-// Fechar o popover pelo botão X
-if (ui.closePopoverBtn) {
-    ui.closePopoverBtn.addEventListener('click', () => {
-        closePopover(ui.toggleMinimalistBtn);
-    });
-}
-
-// Fechar o popover com Escape
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && ui.minimalistPopover && !ui.minimalistPopover.hidden) {
-        closePopover(ui.toggleMinimalistBtn);
-    }
-});
-
-// Sincronização bidirecional: edição no popover atualiza a textarea principal
-if (ui.popoverTextArea) {
-    ui.popoverTextArea.addEventListener('input', () => {
-        ui.textarea.value = ui.popoverTextArea.value;
-        ui.popoverTextArea.style.height = 'auto';
-        ui.popoverTextArea.style.height = Math.min(ui.popoverTextArea.scrollHeight, 200) + 'px';
-    });
-}
-
-// Copiar texto via popover
-if (ui.popoverCopyBtn) {
-    ui.popoverCopyBtn.addEventListener('click', () => {
-        if (ui.btnCopy) ui.btnCopy.click();
-        ui.popoverCopyBtn.classList.add('pulsing');
-        setTimeout(() => ui.popoverCopyBtn.classList.remove('pulsing'), 1200);
-    });
-}
-
-// Limpar texto via popover
-if (ui.popoverClearBtn) {
-    ui.popoverClearBtn.addEventListener('click', () => {
-        if (ui.btnClear) ui.btnClear.click();
-        ui.popoverTextArea.value = '';
-        closePopover(ui.toggleMinimalistBtn);
-    });
-}
-
-// ============================================================
-// POPOVER — Ação Jurídica com ciclo assíncrono completo
-// Não usa ui.btnAiLegal.click() para evitar efeitos colaterais
-// do executeSafely (como parar gravação). Chama o serviço diretamente.
-// ============================================================
-if (ui.popoverLegalBtn) {
-    ui.popoverLegalBtn.addEventListener('click', async () => {
-        // 1. Sincroniza a edição do popover de volta à textarea principal
-        ui.textarea.value = ui.popoverTextArea.value;
-        const text = ui.textarea.value.trim();
-        if (!text) return;
-
-        // 2. Feedback visual de início do processamento
-        ui.popoverLegalBtn.classList.add('pulsing');
-        ui.popoverLegalBtn.disabled = true;
-        updateStatus('processing');
-
-        try {
-            // 3. Chama o serviço de IA diretamente
-            const result = await aiService.convertToLegal(text);
-
-            // 4. Atualiza AMBAS as áreas de texto com o resultado
-            ui.textarea.value        = result;
-            ui.popoverTextArea.value = result;
-
-            // Recalcula a altura do textarea do popover para o novo conteúdo
-            ui.popoverTextArea.style.height = 'auto';
-            ui.popoverTextArea.style.height = Math.min(ui.popoverTextArea.scrollHeight, 200) + 'px';
-
-            saveContent();
-            updateStatus('success');
-            setTimeout(() => updateStatus('idle'), 2000);
-
-        } catch (error) {
-            alert('Erro na conversão jurídica (Groq): ' + error.message);
-            updateStatus('error');
-        } finally {
-            // 5. Feedback visual de fim — sempre executado
-            ui.popoverLegalBtn.classList.remove('pulsing');
-            ui.popoverLegalBtn.disabled = false;
         }
     });
 }
