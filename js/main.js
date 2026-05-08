@@ -68,8 +68,7 @@ const ui = {
     popoverTextArea:     document.getElementById('popoverTextArea'),
     popoverCopyBtn:      document.getElementById('popoverCopyBtn'),
     popoverClearBtn:     document.getElementById('popoverClearBtn'),
-    popoverLegalBtn:     document.getElementById('popoverLegalBtn'),  // [NOVO]
-    exitMinimalistBtn:   document.getElementById('exitMinimalistBtn') // [NOVO]
+    popoverLegalBtn:     document.getElementById('popoverLegalBtn')   // [NOVO]
 };
 
 // Variáveis de Estado
@@ -79,21 +78,13 @@ let tempDeletedText = '';
 // ============================================================
 // MODO MINIMALISTA — Configuração e lógica de estado visual
 // ============================================================
-const minimalistButtons = {
-  mic:   ui.micBtn,
-  aifix: ui.btnAiFix,
-};
-
+// Ultra Minimalista: apenas o microfone tem estado visual gerenciado
 function updateMinimalistButtonStates(activeKey = null) {
-  const isMinimalist = ui.container.classList.contains('minimalist-mode');
-  Object.entries(minimalistButtons).forEach(([key, btn]) => {
-    if (!btn) return;
-    btn.classList.remove('state-muted', 'state-active');
-    if (isMinimalist) {
-      if (activeKey === key) btn.classList.add('state-active');
-      else btn.classList.add('state-muted');
-    }
-  });
+  if (!ui.micBtn) return;
+  ui.micBtn.classList.remove('state-muted', 'state-active');
+  if (ui.container.classList.contains('minimalist-mode')) {
+    ui.micBtn.classList.add(activeKey === 'mic' ? 'state-active' : 'state-muted');
+  }
 }
 
 /**
@@ -269,6 +260,7 @@ const updateStatus = (status) => {
     ui.micBtn.style.backgroundColor = ''; 
 
     if (status === 'starting') {
+        closePopover();                          // Recolhe o balão ao iniciar nova gravação
         updateMinimalistButtonStates('mic');
         ui.statusMsg.textContent = "CONECTANDO...";
         ui.statusMsg.classList.add('active', 'status-starting');
@@ -946,19 +938,7 @@ if (ui.toggleMinimalistBtn) {
                         if (ui.textarea) ui.textarea.scrollTop = ui.textarea.scrollHeight;
                     });
                 });
-
-                // ── Botão "Sair" dentro da janela PiP (exitMinimalistBtn) ───
-                //    Como o container foi movido para outra window, o listener
-                //    precisa ser registrado depois do appendChild.
-                const exitBtn = pipWindow.document.getElementById('exitMinimalistBtn');
-                if (exitBtn) {
-                    exitBtn.addEventListener('click', () => {
-                        // Fechar a janela PiP dispara o evento 'pagehide' acima,
-                        // que cuida de toda a limpeza de estado.
-                        pipWindow.close();
-                    });
-                }
-
+                
             } catch (err) {
                 console.warn('Document PiP (minimalist) bloqueado:', err);
                 ui.statusMsg.textContent = 'Permissão de janela flutuante negada pelo navegador.';
