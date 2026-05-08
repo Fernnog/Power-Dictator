@@ -697,36 +697,6 @@ textarea {
 }
 .btn-close:hover { color: var(--text-main); }
 
-.changelog-list { 
-    overflow-y: auto; 
-    padding-right: 10px; 
-}
-
-.version-item { 
-    margin-bottom: 1.5rem; 
-    border-bottom: 1px solid var(--border); 
-    padding-bottom: 1rem; 
-}
-.version-item:last-child { border-bottom: none; margin-bottom: 0; }
-
-.version-header { 
-    display: flex; 
-    justify-content: space-between; 
-    align-items: baseline;
-    margin-bottom: 0.5rem; 
-}
-.v-num { font-weight: 700; color: var(--c-mic); font-size: 1rem; }
-.v-date { font-size: 0.8rem; color: var(--text-muted); }
-
-.v-changes { 
-    padding-left: 1.2rem; 
-    font-size: 0.9rem; 
-    color: #4b5563; 
-    margin: 0;
-    list-style-type: disc;
-}
-.v-changes li { margin-bottom: 4px; }
-
 @keyframes slideUp {
     from { transform: translateY(20px); opacity: 0; }
     to { transform: translateY(0); opacity: 1; }
@@ -1182,208 +1152,89 @@ body.is-pip-mode .btn-toggle-size {
 }
 
 /* ================================================================ */
-/* MODO MINIMALISTA — WIDGET ULTRA-COMPACTO                         */
+/* MODO COMPACTO — ESTADO MIC (dentro de janela flutuante)          */
+/* Exibe apenas o botão de microfone, centralizado na janela.       */
+/* O frame da janela PiP é 360×500; o CSS preenche esse espaço      */
+/* com o fundo do app e centraliza apenas o botão de gravação.      */
+/* No Caminho B (window.open), a janela tem 140×140 fisicamente.    */
 /* ================================================================ */
 
 .container.minimalist-mode {
-  position: fixed;          /* FIXED — relativo ao viewport, não ao body com overflow:hidden */
-  width: auto;
-  min-width: 0;
-  height: auto;
-  padding: 0;               /* O dock controla seu próprio espaçamento interno */
-  background: transparent;
-  box-shadow: none;
-  border: none;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 9999;            /* Flutua acima de modais (1000) e toasts (1000) */
-  transition: none;         /* Desativado: evita lag durante o arrasto */
-}
-
-.container.minimalist-mode > * {
-  display: none;
-}
-
-.container.minimalist-mode > [data-minimalist-visible] {
-  display: flex;
-}
-
-.container.minimalist-mode .control-dock {
-  background: var(--bg-card, #ffffff);
-  border-radius: 50%;       /* Círculo perfeito ao redor do microfone */
-  padding: 4px;
-  gap: 0;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-  border: 1px solid var(--border, #e5e7eb);
-  align-items: center;
-  justify-content: center;
-}
-
-/* Ultra Minimalista: apenas o botão de microfone permanece visível */
-.container.minimalist-mode .control-dock > *:not(#micBtn) {
-  display: none !important;
-}
-
-/* Garante que textos dos botões não apareçam no widget */
-.container.minimalist-mode .control-dock .btn-action span {
-  display: none !important;
-}
-
-.btn-action.state-muted {
-  filter: grayscale(75%) opacity(0.55);
-  transition: filter 0.35s ease, transform 0.2s ease;
-}
-
-.btn-action.state-muted:hover {
-  filter: grayscale(30%) opacity(0.85);
-  transform: translateY(-2px);
-}
-
-.btn-action.state-active {
-  filter: grayscale(0%) opacity(1) brightness(1.05);
-  animation: btnPulse 1.2s ease-in-out infinite;
-}
-
-/* ================================================================ */
-/* POPOVER — BALÃO DINÂMICO DE RESULTADO                            */
-/* ================================================================ */
-
-.minimalist-popover {
-  /* display NÃO é declarado aqui.
-     O atributo HTML [hidden] age normalmente (display:none) fora do modo minimalista.
-     O JS usa style.display='flex' (inline) para exibi-lo dentro do modo minimalista,
-     sobrescrevendo o seletor > * { display:none } que não tem !important. */
-  position: absolute;
-  bottom: calc(100% + 12px);
-  left: 50%;
-  transform: translateX(-50%);
-  width: 320px;
-  max-width: calc(100vw - 32px);
-  background: var(--bg-card, #ffffff);
-  border: 1px solid var(--border, #e5e7eb);
-  border-radius: 20px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
-  flex-direction: column;
-  overflow: hidden;
-  z-index: 200;
-  animation: popoverEnter 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-}
-
-@keyframes popoverEnter {
-  from { opacity: 0; transform: translateX(-50%) scale(0.88) translateY(10px); }
-  to { opacity: 1; transform: translateX(-50%) scale(1) translateY(0); }
-}
-
-.popover-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border, #e5e7eb);
-  background: var(--bg-app, #f9fafb);
-  flex-shrink: 0;
-}
-
-.popover-title {
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-muted, #9ca3af);
-  user-select: none;
-}
-
-.btn-close-popover {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: none;
-  padding: 4px;
-  border-radius: 6px;
-  color: var(--text-muted, #9ca3af);
-  cursor: pointer;
-  transition: color 0.2s ease, background 0.2s ease;
-  line-height: 0;
-}
-
-.btn-close-popover:hover {
-  color: var(--c-clear, #ef4444);
-  background: rgba(239, 68, 68, 0.08);
-}
-
-.popover-body {
-  padding: 12px 14px;
-  overflow-y: auto;
-  max-height: 260px;
-}
-
-#popoverTextArea {
-  box-sizing: border-box;
-  width: 100%;
-  min-height: 60px;
-  resize: none;
-  overflow: hidden;
-  font-size: 0.95rem;
-  line-height: 1.6;
-  color: var(--text-main, #111827);
-  border: none;
-  outline: none;
-  background: transparent;
-  cursor: text;
-}
-
-.popover-footer {
-  display: flex;
-  gap: 8px;
-  padding: 10px 14px;
-  background: var(--bg-app, #f9fafb);
-  border-top: 1px solid var(--border, #e5e7eb);
-  flex-shrink: 0;
-}
-
-/* ================================================================ */
-/* MODO ULTRA COMPACTO — Novos controles do widget                  */
-/* ================================================================ */
-
-/* --- Botões do Footer do Popover (inclui o novo Jurídico) --- */
-.popover-footer .btn-action {
-    flex: 1;
-    padding: 10px 8px;
-    border-radius: 10px;
+    position: fixed;
+    inset: 0;                          /* Preenche todo o viewport da janela flutuante */
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    background: var(--bg-app);         /* Fundo cinza limpo da aplicação */
     box-shadow: none;
+    border: none;
+    border-radius: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    transition: none;
 }
 
-/* Ícones only: sem texto no rodapé do balão */
-.popover-footer .btn-action span {
+/* Oculta tudo exceto o control-dock (que contém o microfone) */
+.container.minimalist-mode > * {
     display: none;
 }
 
-/* --- Popover Invertido (quando widget está no topo da tela) --- */
-.minimalist-popover.popover-flipped {
-    bottom: auto;
-    top: calc(100% + 12px);
-    animation: popoverEnterFlipped 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+.container.minimalist-mode > [data-minimalist-visible] {
+    display: flex;
 }
 
-@keyframes popoverEnterFlipped {
-    from { opacity: 0; transform: translateX(-50%) scale(0.88) translateY(-10px); }
-    to   { opacity: 1; transform: translateX(-50%) scale(1) translateY(0); }
+/* Dock transparente: apenas um anel visual ao redor do microfone */
+.container.minimalist-mode .control-dock {
+    background: var(--bg-card, #ffffff);
+    border-radius: 50%;
+    padding: 6px;
+    gap: 0;
+    box-shadow: 0 8px 28px rgba(79, 70, 229, 0.25);
+    border: 1px solid var(--border, #e5e7eb);
+    align-items: center;
+    justify-content: center;
+    display: flex;
 }
 
-/* --- Estado visual dos botões no Ultra Compacto --- */
-/* Sobrescreve o btn-mic no minimalist para remover flex:1.5 herdado */
+/* Apenas o microfone permanece visível no Estado Mic */
+.container.minimalist-mode .control-dock > *:not(#micBtn) {
+    display: none !important;
+}
+
+/* Garante que textos dos botões não apareçam */
+.container.minimalist-mode .control-dock .btn-action span {
+    display: none !important;
+}
+
+/* Botão de microfone levemente maior para facilitar o clique */
 .container.minimalist-mode .control-dock #micBtn {
     flex: 0 0 auto;
-    width: 40px;
-    height: 40px;
+    width: 56px;
+    height: 56px;
     padding: 0;
     border-radius: 50%;
-    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+    box-shadow: 0 6px 18px rgba(79, 70, 229, 0.35);
 }
 
 .container.minimalist-mode .control-dock #micBtn svg {
-    width: 18px;
-    height: 18px;
+    width: 22px;
+    height: 22px;
+}
+
+/* --- Estados visuais de botão (mantidos, usados pelo microfone) --- */
+.btn-action.state-muted {
+    filter: grayscale(75%) opacity(0.55);
+    transition: filter 0.35s ease, transform 0.2s ease;
+}
+
+.btn-action.state-muted:hover {
+    filter: grayscale(30%) opacity(0.85);
+    transform: translateY(-2px);
+}
+
+.btn-action.state-active {
+    filter: grayscale(0%) opacity(1) brightness(1.05);
+    animation: btnPulse 1.2s ease-in-out infinite;
 }
