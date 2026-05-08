@@ -59,12 +59,63 @@ const ui = {
     dragImage:      document.getElementById('dragImage'),
 
     // [INSERIR] Placeholder de estado do modo PiP
-    pipPlaceholder: document.getElementById('pipPlaceholder')
+    pipPlaceholder: document.getElementById('pipPlaceholder'),
+
+    // [NOVO] Elementos do Modo Minimalista
+    toggleMinimalistBtn: document.getElementById('toggleMinimalistBtn'),
+    minimalistPopover:   document.getElementById('minimalistPopover'),
+    closePopoverBtn:     document.getElementById('closePopoverBtn'),
+    popoverTextArea:     document.getElementById('popoverTextArea'),
+    popoverCopyBtn:      document.getElementById('popoverCopyBtn'),
+    popoverClearBtn:     document.getElementById('popoverClearBtn')
 };
 
 // Variáveis de Estado
 let undoTimeout = null;
 let tempDeletedText = '';
+
+// ============================================================
+// MODO MINIMALISTA — Configuração e lógica de estado visual
+// ============================================================
+const minimalistButtons = {
+  mic:   ui.micBtn,
+  aifix: ui.btnAiFix,
+};
+
+function updateMinimalistButtonStates(activeKey = null) {
+  const isMinimalist = ui.container.classList.contains('minimalist-mode');
+  Object.entries(minimalistButtons).forEach(([key, btn]) => {
+    if (!btn) return;
+    btn.classList.remove('state-muted', 'state-active');
+    if (isMinimalist) {
+      if (activeKey === key) btn.classList.add('state-active');
+      else btn.classList.add('state-muted');
+    }
+  });
+}
+
+function showPopoverIfMinimalist() {
+  if (!ui.container.classList.contains('minimalist-mode')) return;
+  const content = ui.textarea.value.trim();
+  if (!content) return;
+
+  ui.popoverTextArea.value = content;
+  ui.popoverTextArea.style.height = 'auto';
+  ui.popoverTextArea.style.height = ui.popoverTextArea.scrollHeight + 'px';
+
+  ui.minimalistPopover.hidden = false;
+  ui.minimalistPopover.setAttribute('aria-hidden', 'false');
+
+  ui.minimalistPopover.style.animation = 'none';
+  void ui.minimalistPopover.offsetWidth;
+  ui.minimalistPopover.style.animation = '';
+}
+
+function closePopover(returnFocusTo = null) {
+  ui.minimalistPopover.hidden = true;
+  ui.minimalistPopover.setAttribute('aria-hidden', 'true');
+  if (returnFocusTo) returnFocusTo.focus();
+}
 
 // ========================================================
 // 2. WAKE LOCK (Modo Insônia)
@@ -175,6 +226,8 @@ const handleTranscriptionResult = (finalText, interimText) => {
         if (ui.container.classList.contains('minimized')) {
             ui.textarea.scrollTop = ui.textarea.scrollHeight;
         }
+
+        showPopoverIfMinimalist();
     }
 };
 
@@ -183,24 +236,29 @@ const updateStatus = (status) => {
     ui.micBtn.style.backgroundColor = ''; 
 
     if (status === 'starting') {
+        updateMinimalistButtonStates('mic');
         ui.statusMsg.textContent = "CONECTANDO...";
         ui.statusMsg.classList.add('active', 'status-starting');
         ui.micBtn.style.backgroundColor = '#eab308'; 
         ui.micBtn.classList.add('pulsing');
     } else if (status === 'recording') {
+        updateMinimalistButtonStates('mic');
         ui.statusMsg.textContent = "GRAVANDO";
         ui.statusMsg.classList.add('active', 'status-recording');
         ui.micBtn.classList.add('recording', 'pulsing');
     } else if (status === 'processing') {
+        updateMinimalistButtonStates('aifix');
         ui.statusMsg.textContent = "PROCESSANDO IA...";
         ui.statusMsg.classList.add('active', 'status-ai');
     } else if (status === 'error') {
+        updateMinimalistButtonStates(null);
         ui.statusMsg.textContent = "ERRO / BLOQUEADO";
         ui.statusMsg.classList.add('active', 'status-error');
         ui.micBtn.classList.remove('recording');
         stopVisualEffects(); 
         toggleWakeLock(false);
     } else {
+        updateMinimalistButtonStates(null);
         ui.statusMsg.textContent = "";
         ui.statusMsg.classList.remove('active');
         ui.micBtn.classList.remove('recording', 'pulsing'); 
@@ -292,6 +350,7 @@ ui.btnAiFix.addEventListener('click', () => {
             ui.textarea.value = result;
             saveContent();
             updateStatus('success');
+            showPopoverIfMinimalist();
         } catch (error) {
             alert("Erro na IA (Llama/Groq): " + error.message);
             updateStatus('error');
@@ -753,4 +812,67 @@ if (ui.installPwaBtn) {
             deferredPrompt = null;
         }
     });
+}
+
+// ============================================================
+// EVENT LISTENERS — MODO MINIMALISTA
+// ============================================================
+
+if (ui.toggleMinimalistBtn) {
+  ui.toggleMinimalistBtn.addEventListener('click', () => {
+    const isEntering = !ui.container.classList.contains('minimalist-mode');
+    ui.container.classList.toggle('minimalist-mode');
+
+    ui.toggleMinimalistBtn.setAttribute('aria-pressed', String(isEntering));
+    ui.toggleMinimalistBtn.setAttribute(
+      'aria-label',
+      isEntering ? 'Desativar modo minimalista' : 'Ativar modo minimalista'
+    );
+
+    if (isEntering) {
+      updateMinimalistButtonStates(null);
+      showPopoverIfMinimalist();
+    } else {
+      updateMinimalistButtonStates(null);
+      closePopover(ui.toggleMinimalistBtn);
+    }
+  });
+}
+
+if (ui.closePopoverBtn) {
+  ui.closePopoverBtn.addEventListener('click', () => {
+    closePopover(minimalistButtons?.lastActive || ui.toggleMinimalistBtn);
+  });
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && ui.minimalistPopover && !ui.minimalistPopover.hidden) {
+    closePopover(ui.toggleMinimalistBtn);
+  }
+});
+
+if (ui.popoverCopyBtn) {
+  ui.popoverCopyBtn.addEventListener('click', () => {
+    if (ui.btnCopy) ui.btnCopy.click();
+    ui.popoverCopyBtn.classList.add('status-success');
+    setTimeout(() => {
+      ui.popoverCopyBtn.classList.remove('status-success');
+    }, 1500);
+  });
+}
+
+if (ui.popoverClearBtn) {
+  ui.popoverClearBtn.addEventListener('click', () => {
+    if (ui.btnClear) ui.btnClear.click();
+    ui.popoverTextArea.value = '';
+    closePopover(ui.toggleMinimalistBtn);
+  });
+}
+
+if (ui.popoverTextArea) {
+  ui.popoverTextArea.addEventListener('input', () => {
+    ui.textarea.value = ui.popoverTextArea.value;
+    ui.popoverTextArea.style.height = 'auto';
+    ui.popoverTextArea.style.height = ui.popoverTextArea.scrollHeight + 'px';
+  });
 }
