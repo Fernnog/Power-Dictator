@@ -815,12 +815,28 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 
     const urlParams = new URLSearchParams(window.location.search);
+
     if (urlParams.get('mode') === 'compact') {
         setTimeout(() => {
             if (!ui.container.classList.contains('minimized')) {
                 ui.toggleSizeBtn.click();
             }
         }, 100);
+    }
+
+    // Fallback window.open: ativa o modo ultra compacto quando aberto como popup
+    if (urlParams.get('mode') === 'minimalist') {
+        document.body.classList.add('is-pip-mode');
+        setTimeout(() => {
+            ui.container.classList.remove('minimized');
+            ui.container.classList.add('minimalist-mode');
+
+            // O botão de sair fecha a janela popup diretamente
+            const exitBtn = document.getElementById('exitMinimalistBtn');
+            if (exitBtn) {
+                exitBtn.addEventListener('click', () => window.close());
+            }
+        }, 150);
     }
 });
 
@@ -848,152 +864,132 @@ if (ui.installPwaBtn) {
 }
 
 // ============================================================
-// MODO MINIMALIST — Máquina de Estados e Navegação
+// MODO ULTRA COMPACTO — Janela Flutuante (fora do navegador)
+// Usa a mesma infraestrutura do modo compacto (popOutBtn):
+// Document Picture-in-Picture API (Chrome 116+) com fallback
+// para window.open em navegadores sem suporte.
 // ============================================================
 
-/**
- * Ponto único de controle do modo ultra compacto.
- * Garante que a navegação nunca passe pelo modo `.minimized`.
- *
- * @param {boolean} forceExit - true para forçar a saída, independente do estado.
- */
-function toggleMinimalistMode(forceExit = false) {
-    const isCurrentlyMinimalist = ui.container.classList.contains('minimalist-mode');
-    const isEntering = !forceExit && !isCurrentlyMinimalist;
-
-    if (isEntering) {
-        // Se o modo compacto (.minimized) estiver ativo, remova-o antes
-        // sem chamar setUIMode(), que dispararia window.resizeTo() desnecessariamente.
-        if (ui.container.classList.contains('minimized')) {
-            ui.container.classList.remove('minimized');
-            const iconMinimize = ui.container.querySelector('#iconMinimize');
-            const iconMaximize = ui.container.querySelector('#iconMaximize');
-            if (iconMinimize) iconMinimize.classList.remove('icon-hidden');
-            if (iconMaximize) iconMaximize.classList.add('icon-hidden');
-        }
-
-        ui.container.classList.add('minimalist-mode');
-
-        // Posiciona o widget no centro do viewport após o próximo frame de renderização,
-        // garantindo que as dimensões do dock já foram calculadas pelo browser.
-        requestAnimationFrame(() => {
-            const rect = ui.container.getBoundingClientRect();
-            const centerX = Math.round((window.innerWidth  - rect.width)  / 2);
-            const centerY = Math.round((window.innerHeight - rect.height) / 2);
-            ui.container.style.left = centerX + 'px';
-            ui.container.style.top  = centerY + 'px';
-        });
-
-        if (ui.toggleMinimalistBtn) {
-            ui.toggleMinimalistBtn.setAttribute('aria-pressed', 'true');
-            ui.toggleMinimalistBtn.setAttribute('aria-label', 'Desativar modo minimalista');
-        }
-
-        updateMinimalistButtonStates(null);
-        showPopoverIfMinimalist();
-
-    } else {
-        // Sai do ultra compacto e volta DIRETAMENTE ao modo expandido
-        ui.container.classList.remove('minimalist-mode');
-
-        // Limpa as coordenadas de posição definidas pelo drag
-        ui.container.style.left      = '';
-        ui.container.style.top       = '';
-        ui.container.style.transform = '';
-
-        closePopover();
-        updateMinimalistButtonStates(null);
-
-        if (ui.toggleMinimalistBtn) {
-            ui.toggleMinimalistBtn.setAttribute('aria-pressed', 'false');
-            ui.toggleMinimalistBtn.setAttribute('aria-label', 'Ativar modo minimalista');
-        }
-    }
-}
-
-// Botão de entrada (modo expandido → ultra compacto)
 if (ui.toggleMinimalistBtn) {
-    ui.toggleMinimalistBtn.addEventListener('click', () => toggleMinimalistMode());
-}
+    ui.toggleMinimalistBtn.addEventListener('click', async () => {
 
-// Botão de saída dentro do dock do widget (ultra compacto → expandido)
-if (ui.exitMinimalistBtn) {
-    ui.exitMinimalistBtn.addEventListener('click', () => toggleMinimalistMode(true));
-}
+        const _canUsePiP = 'documentPictureInPicture' in window;
 
-// ============================================================
-// DRAG & DROP DO WIDGET MINIMALIST — Pointer Events API
-// Funciona com mouse, touch e caneta stylus.
-// setPointerCapture garante que eventos continuem chegando
-// mesmo quando o ponteiro sai da área do elemento.
-// ============================================================
-(function initWidgetDrag() {
-    const dragHandle = document.getElementById('dragHandle');
-    if (!dragHandle) return;
+        // ── CAMINHO 1: Document Picture-in-Picture (Chrome 116+) ──────────
+        if (_canUsePiP) {
+            try {
+                // Dimensões compactas para o widget minimalista
+                // Largura suficiente para 2 botões + drag handle + exit btn
+                const pipWindow = await documentPictureInPicture.requestWindow({
+                    width:  260,
+                    height: 80,
+                    disallowReturnToOpener: false
+                });
 
-    let isDragging    = false;
-    let startPointerX = 0;
-    let startPointerY = 0;
-    let startContainerX = 0;
-    let startContainerY = 0;
+                // 1. Clona todos os estilos da aba principal para a janela PiP
+                [...document.styleSheets].forEach((sheet) => {
+                    try {
+                        const rules = [...sheet.cssRules].map(r => r.cssText).join('');
+                        const style = pipWindow.document.createElement('style');
+                        style.textContent = rules;
+                        pipWindow.document.head.appendChild(style);
+                    } catch (_e) {
+                        if (sheet.href) {
+                            const link = pipWindow.document.createElement('link');
+                            link.rel  = 'stylesheet';
+                            link.href = sheet.href;
+                            pipWindow.document.head.appendChild(link);
+                        }
+                    }
+                });
 
-    dragHandle.addEventListener('pointerdown', (e) => {
-        // Somente botão principal (esquerdo) em mouse; qualquer toque em touch
-        if (e.pointerType === 'mouse' && e.button !== 0) return;
-        e.preventDefault();
+                // 2. Prepara o body da janela PiP
+                pipWindow.document.body.classList.add('is-pip-mode');
+                pipWindow.document.body.style.cssText =
+                    'margin:0; padding:0; background:var(--bg-app,#ffffff); overflow:hidden; display:flex; align-items:center; justify-content:center;';
 
-        // Captura o ponteiro: eventos continuam chegando mesmo fora do elemento
-        dragHandle.setPointerCapture(e.pointerId);
-        isDragging = true;
+                // 3. Garante que o modo compacto (.minimized) NÃO esteja ativo
+                //    e aplica somente o modo ultra compacto
+                ui.container.classList.remove('minimized');
+                ui.container.classList.add('minimalist-mode');
 
-        // Ponto de partida do ponteiro
-        startPointerX = e.clientX;
-        startPointerY = e.clientY;
+                // 4. Move o container para a janela PiP
+                pipWindow.document.body.appendChild(ui.container);
 
-        // Posição atual do widget (via getBoundingClientRect para precisão)
-        const rect = ui.container.getBoundingClientRect();
-        startContainerX = rect.left;
-        startContainerY = rect.top;
+                // 5. Exibe o placeholder na aba principal (reaproveitando o existente)
+                if (ui.pipPlaceholder) {
+                    ui.pipPlaceholder.style.display = 'flex';
+                }
 
-        // Desativa transições durante o drag para resposta imediata
-        ui.container.style.transition = 'none';
-        dragHandle.style.cursor = 'grabbing';
+                // 6. Marca o botão como ativo
+                ui.toggleMinimalistBtn.setAttribute('aria-pressed', 'true');
+
+                // ── Restauração ao fechar a janela PiP ──────────────────────
+                pipWindow.addEventListener('pagehide', () => {
+                    // Oculta o placeholder
+                    if (ui.pipPlaceholder) {
+                        ui.pipPlaceholder.style.display = 'none';
+                    }
+
+                    // Devolve o container à aba principal
+                    document.body.appendChild(ui.container);
+
+                    // Remove o modo ultra compacto e garante retorno ao Expandido
+                    ui.container.classList.remove('minimalist-mode');
+                    closePopover();
+                    setUIMode(false); // Força modo expandido (mesma lógica do popOutBtn)
+
+                    ui.toggleMinimalistBtn.setAttribute('aria-pressed', 'false');
+
+                    // Rola para o final do texto após reflow
+                    requestAnimationFrame(() => {
+                        if (ui.textarea) ui.textarea.scrollTop = ui.textarea.scrollHeight;
+                    });
+                });
+
+                // ── Botão "Sair" dentro da janela PiP (exitMinimalistBtn) ───
+                //    Como o container foi movido para outra window, o listener
+                //    precisa ser registrado depois do appendChild.
+                const exitBtn = pipWindow.document.getElementById('exitMinimalistBtn');
+                if (exitBtn) {
+                    exitBtn.addEventListener('click', () => {
+                        // Fechar a janela PiP dispara o evento 'pagehide' acima,
+                        // que cuida de toda a limpeza de estado.
+                        pipWindow.close();
+                    });
+                }
+
+            } catch (err) {
+                console.warn('Document PiP (minimalist) bloqueado:', err);
+                ui.statusMsg.textContent = 'Permissão de janela flutuante negada pelo navegador.';
+                ui.statusMsg.className   = 'status-bar active status-warning';
+                setTimeout(() => {
+                    ui.statusMsg.textContent = '';
+                    ui.statusMsg.className   = 'status-bar';
+                }, 4000);
+            }
+
+        // ── CAMINHO 2: window.open (Firefox, Safari, Edge legado) ────────
+        } else {
+            // O popup abre a mesma página com o parâmetro ?mode=minimalist.
+            // A página detecta o parâmetro no DOMContentLoaded e ativa o modo.
+            const W = 260;
+            const H = 90;
+            // Posiciona no canto inferior direito do monitor disponível
+            const screenLeft = window.screen.availLeft || 0;
+            const screenTop  = window.screen.availTop  || 0;
+            const left = (screenLeft + window.screen.availWidth)  - W - 16;
+            const top  = (screenTop  + window.screen.availHeight) - H - 16;
+
+            window.open(
+                window.location.pathname + '?mode=minimalist',
+                'DitadoMiniWidget',
+                `width=${W},height=${H},left=${left},top=${top},popup=yes,` +
+                `resizable=no,scrollbars=no,toolbar=no,menubar=no,status=no`
+            );
+        }
     });
-
-    dragHandle.addEventListener('pointermove', (e) => {
-        if (!isDragging) return;
-        e.preventDefault();
-
-        const deltaX = e.clientX - startPointerX;
-        const deltaY = e.clientY - startPointerY;
-
-        let newX = startContainerX + deltaX;
-        let newY = startContainerY + deltaY;
-
-        // Limita o widget dentro dos limites do viewport
-        const rect = ui.container.getBoundingClientRect();
-        newX = Math.max(0, Math.min(newX, window.innerWidth  - rect.width));
-        newY = Math.max(0, Math.min(newY, window.innerHeight - rect.height));
-
-        ui.container.style.left = newX + 'px';
-        ui.container.style.top  = newY + 'px';
-
-        // Atualiza a direção do popover conforme a posição vertical
-        updatePopoverFlip(newY);
-    });
-
-    function endDrag() {
-        if (!isDragging) return;
-        isDragging = false;
-        dragHandle.style.cursor = '';
-        // Reativa a transição (somente propriedades que não sejam left/top
-        // para não criar animação no próximo drag)
-        ui.container.style.transition = '';
-    }
-
-    dragHandle.addEventListener('pointerup',     endDrag);
-    dragHandle.addEventListener('pointercancel', endDrag);
-})();
+}
 
 // ============================================================
 // POPOVER — Listeners de interação
