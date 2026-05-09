@@ -8,12 +8,12 @@ import { HotkeyManager } from './hotkeys.js';
 let activeExternalWindow = null;
 
 // [NOVO] Referência à janela PiP ativa (Caminho A).
-// Necessário para que transitionToActionState/MicState possam fechá-la e reabri-la.
 let activePipWindow = null;
 
-// [NOVO] Flag de sincronização: impede que o handler 'pagehide' execute a
-// lógica de restauração completa durante um reopen interno programático.
-let _isReopeningPip = false;
+// [NOVO] Contador de sessão PiP. Incrementado a cada reopen programático.
+// Cada handler pagehide captura o ID do momento em que FOI REGISTRADO.
+// Se o ID global avançou, o pagehide é de um pip antigo — ignorar restauração.
+let _pipSessionId = 0;
 
 // ========================================================
 // 1. REFERÊNCIAS DE UI (DOM Elements)
@@ -115,27 +115,6 @@ function cloneStylesToPipWindow(pipWin) {
 }
 
 /**
- * Registra o listener 'pagehide' em uma janela PiP.
- * Centraliza a lógica de restauração do container para a aba principal.
- * A flag _isReopeningPip interrompe a restauração durante transições internas.
- * @param {Window} pipWin - A janela PiP a ser monitorada.
- */
-function registerPipPagehide(pipWin) {
-    pipWin.addEventListener('pagehide', () => {
-        activePipWindow = null;
-        // Reopen interno: não executa restauração completa, apenas limpa a ref.
-        if (_isReopeningPip) return;
-        if (ui.pipPlaceholder) ui.pipPlaceholder.style.display = 'none';
-        document.body.appendChild(ui.container);
-        ui.container.classList.remove('minimalist-mode', 'minimized');
-        setUIMode(false);
-        requestAnimationFrame(() => {
-            if (ui.textarea) ui.textarea.scrollTop = ui.textarea.scrollHeight;
-        });
-    });
-}
-
-/**
  * Abre uma janela Document PiP com as dimensões especificadas,
  * transfere o container, clona os estilos e registra o pagehide.
  * As classes CSS do container devem ser configuradas ANTES de chamar esta função.
@@ -150,10 +129,33 @@ async function openPipWindow(width, height) {
         disallowReturnToOpener: false
     });
     activePipWindow = pipWin;
+
+    // Captura o ID da sessão NESTE momento. O handler pagehide abaixo
+    // usa este snapshot para detectar se foi disparado por um pip obsoleto.
+    const capturedSessionId = _pipSessionId;
+
     cloneStylesToPipWindow(pipWin);
     pipWin.document.body.classList.add('is-pip-mode');
     pipWin.document.body.appendChild(ui.container);
-    registerPipPagehide(pipWin);
+
+    pipWin.addEventListener('pagehide', () => {
+        activePipWindow = null;
+
+        // Se _pipSessionId avançou desde que este handler foi registrado,
+        // este pagehide veio de um pip antigo (reopen programático).
+        // Ignorar: o novo pip já está ativo com o container.
+        if (_pipSessionId !== capturedSessionId) return;
+
+        // Fechamento manual pelo usuário — restaurar normalmente.
+        if (ui.pipPlaceholder) ui.pipPlaceholder.style.display = 'none';
+        document.body.appendChild(ui.container);
+        ui.container.classList.remove('minimalist-mode', 'minimized');
+        setUIMode(false);
+        requestAnimationFrame(() => {
+            if (ui.textarea) ui.textarea.scrollTop = ui.textarea.scrollHeight;
+        });
+    });
+
     return pipWin;
 }
 
@@ -196,7 +198,9 @@ async function transitionToActionState() {
             const prevX = activePipWindow.screenX;
             const prevY = activePipWindow.screenY;
 
-            _isReopeningPip = true;
+            // Avança o session ID ANTES de fechar. Qualquer pagehide que disparar
+            // depois deste ponto (mesmo que tardio) terá ID desatualizado e será ignorado.
+            _pipSessionId++;
             activePipWindow.close();
             // Aguarda o ciclo de fechamento antes de solicitar nova janela.
             await new Promise(r => setTimeout(r, 80));
@@ -208,13 +212,10 @@ async function transitionToActionState() {
             // dependendo do SO — é uma operação de melhor esforço.
             try { activePipWindow.moveTo(prevX, prevY); } catch (_) {}
 
-            _isReopeningPip = false;
-
             requestAnimationFrame(() => {
                 if (ui.textarea) ui.textarea.scrollTop = ui.textarea.scrollHeight;
             });
         } catch (e) {
-            _isReopeningPip = false;
             console.warn('Reopen PiP (Ação) falhou:', e);
             // Fallback seguro: restaura o container na aba principal.
             if (ui.pipPlaceholder) ui.pipPlaceholder.style.display = 'none';
@@ -260,7 +261,9 @@ async function transitionToMicState() {
             const prevX = activePipWindow.screenX;
             const prevY = activePipWindow.screenY;
 
-            _isReopeningPip = true;
+            // Avança o session ID ANTES de fechar. Qualquer pagehide que disparar
+            // depois deste ponto (mesmo que tardio) terá ID desatualizado e será ignorado.
+            _pipSessionId++;
             activePipWindow.close();
             await new Promise(r => setTimeout(r, 80));
 
@@ -268,10 +271,7 @@ async function transitionToMicState() {
             await openPipWindow(W, H);
 
             try { activePipWindow.moveTo(prevX, prevY); } catch (_) {}
-
-            _isReopeningPip = false;
         } catch (e) {
-            _isReopeningPip = false;
             console.warn('Reopen PiP (Mic) falhou:', e);
             // Fallback seguro: restaura o container na aba principal.
             if (ui.pipPlaceholder) ui.pipPlaceholder.style.display = 'none';
