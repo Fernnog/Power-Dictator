@@ -7,6 +7,14 @@ import { HotkeyManager } from './hotkeys.js';
 // Referência à janela flutuante (somente para o caminho window.open/fallback)
 let activeExternalWindow = null;
 
+// [NOVO] Referência à janela PiP ativa (Caminho A).
+// Necessário para que transitionToActionState/MicState possam fechá-la e reabri-la.
+let activePipWindow = null;
+
+// [NOVO] Flag de sincronização: impede que o handler 'pagehide' execute a
+// lógica de restauração completa durante um reopen interno programático.
+let _isReopeningPip = false;
+
 // ========================================================
 // 1. REFERÊNCIAS DE UI (DOM Elements)
 // ========================================================
@@ -85,62 +93,191 @@ function isInFloatingWindow() {
 }
 
 /**
+ * Clona todas as folhas de estilo da aba principal para uma janela PiP.
+ * @param {Window} pipWin - A janela PiP de destino.
+ */
+function cloneStylesToPipWindow(pipWin) {
+    [...document.styleSheets].forEach((sheet) => {
+        try {
+            const rules = [...sheet.cssRules].map(r => r.cssText).join('');
+            const style = pipWin.document.createElement('style');
+            style.textContent = rules;
+            pipWin.document.head.appendChild(style);
+        } catch (_e) {
+            if (sheet.href) {
+                const link = pipWin.document.createElement('link');
+                link.rel  = 'stylesheet';
+                link.href = sheet.href;
+                pipWin.document.head.appendChild(link);
+            }
+        }
+    });
+}
+
+/**
+ * Registra o listener 'pagehide' em uma janela PiP.
+ * Centraliza a lógica de restauração do container para a aba principal.
+ * A flag _isReopeningPip interrompe a restauração durante transições internas.
+ * @param {Window} pipWin - A janela PiP a ser monitorada.
+ */
+function registerPipPagehide(pipWin) {
+    pipWin.addEventListener('pagehide', () => {
+        activePipWindow = null;
+        // Reopen interno: não executa restauração completa, apenas limpa a ref.
+        if (_isReopeningPip) return;
+        if (ui.pipPlaceholder) ui.pipPlaceholder.style.display = 'none';
+        document.body.appendChild(ui.container);
+        ui.container.classList.remove('minimalist-mode', 'minimized');
+        setUIMode(false);
+        requestAnimationFrame(() => {
+            if (ui.textarea) ui.textarea.scrollTop = ui.textarea.scrollHeight;
+        });
+    });
+}
+
+/**
+ * Abre uma janela Document PiP com as dimensões especificadas,
+ * transfere o container, clona os estilos e registra o pagehide.
+ * As classes CSS do container devem ser configuradas ANTES de chamar esta função.
+ * @param {number} width  - Largura desejada em pixels.
+ * @param {number} height - Altura desejada em pixels.
+ * @returns {Promise<Window>} A janela PiP recém-aberta.
+ */
+async function openPipWindow(width, height) {
+    const pipWin = await documentPictureInPicture.requestWindow({
+        width,
+        height,
+        disallowReturnToOpener: false
+    });
+    activePipWindow = pipWin;
+    cloneStylesToPipWindow(pipWin);
+    pipWin.document.body.classList.add('is-pip-mode');
+    pipWin.document.body.appendChild(ui.container);
+    registerPipPagehide(pipWin);
+    return pipWin;
+}
+
+/**
  * Estado Mic → Estado Ação.
  * Ativado quando a transcrição retorna texto.
- * No Caminho B (window.open), redimensiona a janela popup para 420×550.
- * No Caminho A (PiP), apenas troca as classes — sem resizeTo().
+ *
+ * Caminho B (window.open): resizeTo() funciona — geometria centrada no ponto médio atual.
+ * Caminho A (Document PiP): resizeTo() é bloqueado — usamos a estratégia de Reopen PiP.
  */
-function transitionToActionState() {
+async function transitionToActionState() {
     if (!ui.container.classList.contains('minimalist-mode')) return;
 
     ui.container.classList.remove('minimalist-mode');
     ui.container.classList.add('minimized');
 
-    // Redimensionamento apenas para o Caminho B (window.open).
-    // O Document PiP não suporta resizeTo() — a transição é 100% CSS.
+    // ── CAMINHO B: popup window.open ─────────────────────────────────────────
     if (activeExternalWindow) {
         try {
             const { ACTION_W: W, ACTION_H: H } = CONFIG.UI.WINDOW;
+            // Ancora no centro geométrico da janela atual para expansão fluida.
+            const cx = activeExternalWindow.screenX + (activeExternalWindow.outerWidth  / 2);
+            const cy = activeExternalWindow.screenY + (activeExternalWindow.outerHeight / 2);
             activeExternalWindow.resizeTo(W, H);
-            const screenLeft = activeExternalWindow.screen.availLeft || 0;
-            const screenTop  = activeExternalWindow.screen.availTop  || 0;
-            const left = (screenLeft + activeExternalWindow.screen.availWidth)  - W - 16;
-            const top  = (screenTop  + activeExternalWindow.screen.availHeight) - H - 16;
-            activeExternalWindow.moveTo(left, top);
+            activeExternalWindow.moveTo(cx - W / 2, cy - H / 2);
         } catch (e) {
-            console.warn('resizeTo para Estado Ação bloqueado:', e);
+            console.warn('resizeTo Caminho B (Ação) bloqueado:', e);
         }
+        requestAnimationFrame(() => {
+            if (ui.textarea) ui.textarea.scrollTop = ui.textarea.scrollHeight;
+        });
+        return;
     }
 
-    requestAnimationFrame(() => {
-        if (ui.textarea) ui.textarea.scrollTop = ui.textarea.scrollHeight;
-    });
+    // ── CAMINHO A: Document PiP ── Estratégia de Reopen ──────────────────────
+    if (activePipWindow) {
+        try {
+            const { ACTION_W: W, ACTION_H: H } = CONFIG.UI.WINDOW;
+            // Salva a posição atual para reposicionar a nova janela no mesmo lugar.
+            const prevX = activePipWindow.screenX;
+            const prevY = activePipWindow.screenY;
+
+            _isReopeningPip = true;
+            activePipWindow.close();
+            // Aguarda o ciclo de fechamento antes de solicitar nova janela.
+            await new Promise(r => setTimeout(r, 80));
+
+            // ui.container.classList já está com 'minimized' (definido no topo desta função).
+            await openPipWindow(W, H);
+
+            // Tenta restaurar a posição. moveTo() tem suporte variável em janelas PiP
+            // dependendo do SO — é uma operação de melhor esforço.
+            try { activePipWindow.moveTo(prevX, prevY); } catch (_) {}
+
+            _isReopeningPip = false;
+
+            requestAnimationFrame(() => {
+                if (ui.textarea) ui.textarea.scrollTop = ui.textarea.scrollHeight;
+            });
+        } catch (e) {
+            _isReopeningPip = false;
+            console.warn('Reopen PiP (Ação) falhou:', e);
+            // Fallback seguro: restaura o container na aba principal.
+            if (ui.pipPlaceholder) ui.pipPlaceholder.style.display = 'none';
+            document.body.appendChild(ui.container);
+            ui.container.classList.remove('minimalist-mode', 'minimized');
+            setUIMode(false);
+        }
+    }
 }
 
 /**
  * Estado Ação → Estado Mic.
  * Ativado pelo botão "Limpar". Só executa dentro de uma janela flutuante.
- * No Caminho B, encolhe a janela de volta para 110×110.
+ *
+ * Caminho B (window.open): resizeTo() funciona — encolhe a janela de volta.
+ * Caminho A (Document PiP): resizeTo() é bloqueado — usamos a estratégia de Reopen PiP.
  */
-function transitionToMicState() {
+async function transitionToMicState() {
     if (!isInFloatingWindow()) return;
     if (!ui.container.classList.contains('minimized')) return;
 
     ui.container.classList.remove('minimized');
     ui.container.classList.add('minimalist-mode');
 
-    // Redimensionamento apenas para o Caminho B (window.open).
+    // ── CAMINHO B: popup window.open ─────────────────────────────────────────
     if (activeExternalWindow) {
         try {
             const { MIC_W: W, MIC_H: H } = CONFIG.UI.WINDOW;
+            const cx = activeExternalWindow.screenX + (activeExternalWindow.outerWidth  / 2);
+            const cy = activeExternalWindow.screenY + (activeExternalWindow.outerHeight / 2);
             activeExternalWindow.resizeTo(W, H);
-            const screenLeft = activeExternalWindow.screen.availLeft || 0;
-            const screenTop  = activeExternalWindow.screen.availTop  || 0;
-            const left = (screenLeft + activeExternalWindow.screen.availWidth)  - W - 16;
-            const top  = (screenTop  + activeExternalWindow.screen.availHeight) - H - 16;
-            activeExternalWindow.moveTo(left, top);
+            activeExternalWindow.moveTo(cx - W / 2, cy - H / 2);
         } catch (e) {
-            console.warn('resizeTo para Estado Mic bloqueado:', e);
+            console.warn('resizeTo Caminho B (Mic) bloqueado:', e);
+        }
+        return;
+    }
+
+    // ── CAMINHO A: Document PiP ── Estratégia de Reopen ──────────────────────
+    if (activePipWindow) {
+        try {
+            const { MIC_W: W, MIC_H: H } = CONFIG.UI.WINDOW;
+            const prevX = activePipWindow.screenX;
+            const prevY = activePipWindow.screenY;
+
+            _isReopeningPip = true;
+            activePipWindow.close();
+            await new Promise(r => setTimeout(r, 80));
+
+            // ui.container.classList já está com 'minimalist-mode' (definido no topo desta função).
+            await openPipWindow(W, H);
+
+            try { activePipWindow.moveTo(prevX, prevY); } catch (_) {}
+
+            _isReopeningPip = false;
+        } catch (e) {
+            _isReopeningPip = false;
+            console.warn('Reopen PiP (Mic) falhou:', e);
+            // Fallback seguro: restaura o container na aba principal.
+            if (ui.pipPlaceholder) ui.pipPlaceholder.style.display = 'none';
+            document.body.appendChild(ui.container);
+            ui.container.classList.remove('minimalist-mode', 'minimized');
+            setUIMode(false);
         }
     }
 }
@@ -726,59 +863,23 @@ window.addEventListener('DOMContentLoaded', () => {
             // ── CAMINHO A: Document PiP ──────────────────────────
             ui.popOutBtn.addEventListener('click', async () => {
                 try {
-                    // Abre no tamanho do Estado Ação (360×500).
-                    // A API PiP não suporta resizeTo(), então o tamanho é fixo.
-                    // No Estado Mic, o CSS .minimalist-mode centraliza apenas o
-                    // botão de microfone, preenchendo o restante com --bg-app.
-                    const pipWindow = await documentPictureInPicture.requestWindow({
-                        // IMPORTANTE: A API PiP do Chrome bloqueia resizeTo() por segurança.
-                        // A janela deve ser aberta já no tamanho máximo necessário (Estado Ação).
-                        // No Estado Mic, o CSS .minimalist-mode centraliza o botão de microfone
-                        // e preenche o restante com a cor de fundo da aplicação.
-                        width: CONFIG.UI.WINDOW.PIP_W,
-                        height: CONFIG.UI.WINDOW.PIP_H,
-                        disallowReturnToOpener: false
-                    });
+                    const { MIC_W: W, MIC_H: H } = CONFIG.UI.WINDOW;
 
-                    // Clona todos os estilos da aba principal
-                    [...document.styleSheets].forEach((sheet) => {
-                        try {
-                            const rules = [...sheet.cssRules].map(r => r.cssText).join('');
-                            const style = pipWindow.document.createElement('style');
-                            style.textContent = rules;
-                            pipWindow.document.head.appendChild(style);
-                        } catch (_e) {
-                            if (sheet.href) {
-                                const link = pipWindow.document.createElement('link');
-                                link.rel  = 'stylesheet';
-                                link.href = sheet.href;
-                                pipWindow.document.head.appendChild(link);
-                            }
-                        }
-                    });
-
-                    pipWindow.document.body.classList.add('is-pip-mode');
-
-                    // Inicia no Estado Mic (apenas microfone visível)
+                    // Define o estado inicial ANTES de mover o container para a janela PiP.
                     ui.container.classList.remove('minimized');
                     ui.container.classList.add('minimalist-mode');
 
-                    pipWindow.document.body.appendChild(ui.container);
-
                     if (ui.pipPlaceholder) ui.pipPlaceholder.style.display = 'flex';
 
-                    // Restauração ao fechar a janela PiP
-                    pipWindow.addEventListener('pagehide', () => {
-                        if (ui.pipPlaceholder) ui.pipPlaceholder.style.display = 'none';
-                        document.body.appendChild(ui.container);
-                        ui.container.classList.remove('minimalist-mode', 'minimized');
-                        setUIMode(false); // Retorna ao Modo Expandido
-                        requestAnimationFrame(() => {
-                            if (ui.textarea) ui.textarea.scrollTop = ui.textarea.scrollHeight;
-                        });
-                    });
+                    // openPipWindow() cuida de: requestWindow, clonar estilos,
+                    // mover o container e registrar o pagehide via registerPipPagehide().
+                    await openPipWindow(W, H);
 
                 } catch (err) {
+                    // Desfaz as classes caso a abertura falhe.
+                    ui.container.classList.remove('minimalist-mode');
+                    if (ui.pipPlaceholder) ui.pipPlaceholder.style.display = 'none';
+
                     console.warn('Document PiP bloqueado:', err);
                     ui.statusMsg.textContent = 'Permissão de janela negada pelo navegador.';
                     ui.statusMsg.className   = 'status-bar active status-warning';
