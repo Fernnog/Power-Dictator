@@ -138,8 +138,25 @@ async function openPipWindow(width, height) {
     pipWin.document.body.classList.add('is-pip-mode');
     pipWin.document.body.appendChild(ui.container);
 
+    // [CORREÇÃO 1A] Restaura a opacidade do container após a transferência.
+    // As funções de transição (Ação/Mic) a zeraram antes do resgate para
+    // evitar o flash de tela branca na janela PiP durante o gap de ~80ms.
+    ui.container.style.opacity = '';
+
+    // [CORREÇÃO 1B] Reinicia o loop de animação do visualizador de áudio.
+    // O requestAnimationFrame vinculado ao contexto da janela anterior
+    // é encerrado pelo browser ao fechar a janela; este requestAnimationFrame
+    // força o SpeechManager a recapturar o canvas no novo documento.
+    if (typeof speechManager !== 'undefined' && speechManager?.refreshVisualizer) {
+        requestAnimationFrame(() => speechManager.refreshVisualizer());
+    }
+
     pipWin.addEventListener('pagehide', () => {
-        activePipWindow = null;
+        // [CORREÇÃO 1C] Guarda de identidade: antes de zerar o ponteiro global,
+        // verifica se ele ainda aponta para ESTA janela. Impede race condition
+        // onde o pagehide de uma janela antiga dispara com atraso e corrompe
+        // silenciosamente o ponteiro da sessão nova que já foi registrada.
+        if (activePipWindow === pipWin) activePipWindow = null;
 
         // Se _pipSessionId avançou desde que este handler foi registrado,
         // este pagehide veio de um pip antigo (reopen programático).
@@ -150,6 +167,7 @@ async function openPipWindow(width, height) {
         if (ui.pipPlaceholder) ui.pipPlaceholder.style.display = 'none';
         document.body.appendChild(ui.container);
         ui.container.classList.remove('minimalist-mode', 'minimized');
+        ui.container.style.opacity = ''; // limpeza defensiva em qualquer path de retorno
         setUIMode(false);
         requestAnimationFrame(() => {
             if (ui.textarea) ui.textarea.scrollTop = ui.textarea.scrollHeight;
@@ -198,11 +216,28 @@ async function transitionToActionState() {
             const prevX = activePipWindow.screenX;
             const prevY = activePipWindow.screenY;
 
-            // Avança o session ID ANTES de fechar. Qualquer pagehide que disparar
-            // depois deste ponto (mesmo que tardio) terá ID desatualizado e será ignorado.
+            // [CORREÇÃO 2A] Oculta visualmente o container ANTES de resgatá-lo.
+            // Quando o container for movido para document.body, a janela PiP
+            // ficaria brevemente em branco (~80ms). O opacity:0 disfarça esse gap
+            // sem afetar o layout ou os Event Listeners.
+            ui.container.style.opacity = '0';
+
+            // [CORREÇÃO 2B] Avança o session ID ANTES de fechar. Qualquer pagehide
+            // que disparar depois deste ponto terá ID desatualizado e será ignorado
+            // pela verificação de sessão em openPipWindow().
             _pipSessionId++;
+
+            // [CORREÇÃO 2C] Resgata o container para o documento principal ANTES
+            // de fechar a janela. Esta é a correção da falha raiz: impede que o nó
+            // fique preso num documento destruído, o que tornava os Event Listeners
+            // do container inoperantes na janela PiP seguinte.
+            document.body.appendChild(ui.container);
+
+            // Fecha a janela antiga. Agora é seguro: o container não está mais nela.
             activePipWindow.close();
+
             // Aguarda o ciclo de fechamento antes de solicitar nova janela.
+            // openPipWindow() restaura opacity e reinicia o visualizador internamente.
             await new Promise(r => setTimeout(r, 80));
 
             // ui.container.classList já está com 'minimized' (definido no topo desta função).
@@ -218,6 +253,7 @@ async function transitionToActionState() {
         } catch (e) {
             console.warn('Reopen PiP (Ação) falhou:', e);
             // Fallback seguro: restaura o container na aba principal.
+            ui.container.style.opacity = '';
             if (ui.pipPlaceholder) ui.pipPlaceholder.style.display = 'none';
             document.body.appendChild(ui.container);
             ui.container.classList.remove('minimalist-mode', 'minimized');
@@ -261,10 +297,20 @@ async function transitionToMicState() {
             const prevX = activePipWindow.screenX;
             const prevY = activePipWindow.screenY;
 
-            // Avança o session ID ANTES de fechar. Qualquer pagehide que disparar
-            // depois deste ponto (mesmo que tardio) terá ID desatualizado e será ignorado.
+            // [CORREÇÃO 3A] Oculta visualmente antes de resgatar (evita flash de branco na PiP).
+            ui.container.style.opacity = '0';
+
+            // [CORREÇÃO 3B] Avança o session ID ANTES de fechar.
             _pipSessionId++;
+
+            // [CORREÇÃO 3C] Resgata o container para o documento principal ANTES de fechar.
+            document.body.appendChild(ui.container);
+
+            // Fecha a janela antiga. Container já está em segurança no documento principal.
             activePipWindow.close();
+
+            // Aguarda o ciclo de fechamento.
+            // openPipWindow() restaura opacity e reinicia o visualizador internamente.
             await new Promise(r => setTimeout(r, 80));
 
             // ui.container.classList já está com 'minimalist-mode' (definido no topo desta função).
@@ -274,6 +320,7 @@ async function transitionToMicState() {
         } catch (e) {
             console.warn('Reopen PiP (Mic) falhou:', e);
             // Fallback seguro: restaura o container na aba principal.
+            ui.container.style.opacity = '';
             if (ui.pipPlaceholder) ui.pipPlaceholder.style.display = 'none';
             document.body.appendChild(ui.container);
             ui.container.classList.remove('minimalist-mode', 'minimized');
@@ -539,7 +586,7 @@ ui.btnAiLegal.addEventListener('click', () => {
             const result = await aiService.convertToLegal(text);
             ui.textarea.value = result;
             saveContent();
-            updateStatus('success');
+            updateStatus('');
         } catch (error) {
             alert("Erro na transcrição Jurídica (Groq): " + error.message);
             updateStatus('error');
