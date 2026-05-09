@@ -110,17 +110,17 @@ body {
     display: none !important;
 }
 
-/* VISUALIZADOR SLIM (MODO WIDGET) - v1.0.6 */
+/* LIMPEZA VISUAL v2.0: No estado de leitura (minimized), o visualizador
+   de ondas não é mais necessário. O espaço é devolvido para a área de texto. */
 .container.minimized .visualizer-container {
-    display: flex !important;
-    height: 25px; /* Altura reduzida (era 60px) */
-    min-height: 25px;
-    margin: 0;
-    border: none;
-    border-radius: 0;
-    background: #fdfdfd;
-    border-bottom: 1px solid var(--border);
-    order: 0; /* Garante que fique no topo absoluto */
+    display: none !important;
+}
+
+/* LIMPEZA VISUAL v2.0: O botão de microfone não é necessário no estado
+   de leitura. O dock redistribui automaticamente os botões restantes
+   via justify-content: space-evenly já declarado acima. */
+.container.minimized .control-dock #micBtn {
+    display: none !important;
 }
 
 /* Ajuste fino para a onda parecer maior dentro do espaço pequeno */
