@@ -24,6 +24,10 @@ export class SpeechManager {
         // ID do dispositivo selecionado
         this.selectedDeviceId = 'default';
 
+        // Controle do Animation Frame e Loop Visual
+        this._animationFrameId = null;
+        this._drawVisualizer = null;
+
         this.initRecognition();
     }
 
@@ -209,9 +213,38 @@ export class SpeechManager {
         }
     }
 
+    /**
+     * Reinicia o loop de animação do visualizador de áudio.
+     * Deve ser chamado após o elemento <canvas> ser transferido entre documentos
+     * (ex: ao reabrir a janela PiP), pois o requestAnimationFrame do contexto
+     * anterior é encerrado pelo browser.
+     */
+    refreshVisualizer() {
+        if (this._animationFrameId) {
+            const oldWindow = this.canvas ? this.canvas.ownerDocument.defaultView : window;
+            if (oldWindow) oldWindow.cancelAnimationFrame(this._animationFrameId);
+            this._animationFrameId = null;
+        }
+
+        if (!this.canvas || !this._drawVisualizer) return;
+
+        // Reinicia usando a nova janela hospedeira do canvas
+        const ownerWindow = this.canvas.ownerDocument.defaultView;
+        if (ownerWindow) {
+            this._animationFrameId = ownerWindow.requestAnimationFrame(this._drawVisualizer);
+        }
+    }
+
     stop() {
         this.isRecording = false;
         
+        // Garante que a animação pare ao interromper a gravação
+        if (this._animationFrameId) {
+            const ownerWindow = this.canvas ? this.canvas.ownerDocument.defaultView : window;
+            if (ownerWindow) ownerWindow.cancelAnimationFrame(this._animationFrameId);
+            this._animationFrameId = null;
+        }
+
         // [NOVO] Desliga o motor apropriado
         if (this.useWhisper && this.mediaRecorder && this.mediaRecorder.state !== "inactive") {
             this.mediaRecorder.stop();
@@ -244,10 +277,12 @@ export class SpeechManager {
         const feedbackTarget = document.querySelector('.editor-area'); 
         const canvasTarget = this.canvas;
 
-        const draw = () => {
+        // [MODIFICAÇÃO] Expondo o loop na instância e registrando o ID para suportar a transição PiP
+        this._drawVisualizer = () => {
             if (!this.isRecording) return;
             
-            requestAnimationFrame(draw);
+            const ownerWindow = this.canvas.ownerDocument.defaultView || window;
+            this._animationFrameId = ownerWindow.requestAnimationFrame(this._drawVisualizer);
 
             this.analyser.getByteTimeDomainData(dataArray);
 
@@ -308,7 +343,7 @@ export class SpeechManager {
             }
         };
 
-        draw();
+        this._drawVisualizer();
     }
 
     stopAudioVisualization() {
