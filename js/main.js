@@ -15,6 +15,11 @@ let activePipWindow = null;
 // Se o ID global avançou, o pagehide é de um pip antigo — ignorar restauração.
 let _pipSessionId = 0;
 
+// [NOVO] Memoriza a posição do widget de microfone antes de cada expansão.
+// Permite que transitionToMicState() retorne ao ponto exato onde o usuário
+// havia posicionado o microfone, em vez da posição padrão ou da janela de ação.
+let lastMicPosition = { x: null, y: null };
+
 // ========================================================
 // 1. REFERÊNCIAS DE UI (DOM Elements)
 // ========================================================
@@ -187,6 +192,15 @@ async function openPipWindow(width, height) {
 async function transitionToActionState() {
     if (!ui.container.classList.contains('minimalist-mode')) return;
 
+    // [NOVO] Captura as coordenadas do microfone ANTES de qualquer
+    // alteração de classe ou reopen de janela. Esta é a "fotografia"
+    // que transitionToMicState() usará para retornar ao ponto exato.
+    const currentWin = activeExternalWindow || activePipWindow;
+    if (currentWin) {
+        lastMicPosition.x = currentWin.screenX;
+        lastMicPosition.y = currentWin.screenY;
+    }
+
     ui.container.classList.remove('minimalist-mode');
     ui.container.classList.add('minimized');
 
@@ -212,39 +226,17 @@ async function transitionToActionState() {
     if (activePipWindow) {
         try {
             const { ACTION_W: W, ACTION_H: H } = CONFIG.UI.WINDOW;
-            // Salva a posição atual para reposicionar a nova janela no mesmo lugar.
+            // prevX/prevY: posiciona a *janela de ação* onde estava o microfone.
+            // Mantido independente do lastMicPosition — são propósitos distintos.
             const prevX = activePipWindow.screenX;
             const prevY = activePipWindow.screenY;
 
-            // [CORREÇÃO 2A] Oculta visualmente o container ANTES de resgatá-lo.
-            // Quando o container for movido para document.body, a janela PiP
-            // ficaria brevemente em branco (~80ms). O opacity:0 disfarça esse gap
-            // sem afetar o layout ou os Event Listeners.
             ui.container.style.opacity = '0';
-
-            // [CORREÇÃO 2B] Avança o session ID ANTES de fechar. Qualquer pagehide
-            // que disparar depois deste ponto terá ID desatualizado e será ignorado
-            // pela verificação de sessão em openPipWindow().
             _pipSessionId++;
-
-            // [CORREÇÃO 2C] Resgata o container para o documento principal ANTES
-            // de fechar a janela. Esta é a correção da falha raiz: impede que o nó
-            // fique preso num documento destruído, o que tornava os Event Listeners
-            // do container inoperantes na janela PiP seguinte.
             document.body.appendChild(ui.container);
-
-            // Fecha a janela antiga. Agora é seguro: o container não está mais nela.
             activePipWindow.close();
-
-            // Aguarda o ciclo de fechamento antes de solicitar nova janela.
-            // openPipWindow() restaura opacity e reinicia o visualizador internamente.
             await new Promise(r => setTimeout(r, 80));
-
-            // ui.container.classList já está com 'minimized' (definido no topo desta função).
             await openPipWindow(W, H);
-
-            // Tenta restaurar a posição. moveTo() tem suporte variável em janelas PiP
-            // dependendo do SO — é uma operação de melhor esforço.
             try { activePipWindow.moveTo(prevX, prevY); } catch (_) {}
 
             requestAnimationFrame(() => {
@@ -252,7 +244,6 @@ async function transitionToActionState() {
             });
         } catch (e) {
             console.warn('Reopen PiP (Ação) falhou:', e);
-            // Fallback seguro: restaura o container na aba principal.
             ui.container.style.opacity = '';
             if (ui.pipPlaceholder) ui.pipPlaceholder.style.display = 'none';
             document.body.appendChild(ui.container);
@@ -280,10 +271,18 @@ async function transitionToMicState() {
     if (activeExternalWindow) {
         try {
             const { MIC_W: W, MIC_H: H } = CONFIG.UI.WINDOW;
-            const cx = activeExternalWindow.screenX + (activeExternalWindow.outerWidth  / 2);
-            const cy = activeExternalWindow.screenY + (activeExternalWindow.outerHeight / 2);
             activeExternalWindow.resizeTo(W, H);
-            activeExternalWindow.moveTo(cx - W / 2, cy - H / 2);
+
+            // [NOVO] Restaura a posição memorizada do microfone.
+            // Fallback: centraliza na janela atual caso lastMicPosition não exista
+            // (ex: primeira gravação da sessão antes de qualquer arrasto).
+            if (lastMicPosition.x !== null && lastMicPosition.y !== null) {
+                activeExternalWindow.moveTo(lastMicPosition.x, lastMicPosition.y);
+            } else {
+                const cx = activeExternalWindow.screenX + (activeExternalWindow.outerWidth  / 2);
+                const cy = activeExternalWindow.screenY + (activeExternalWindow.outerHeight / 2);
+                activeExternalWindow.moveTo(cx - W / 2, cy - H / 2);
+            }
         } catch (e) {
             console.warn('resizeTo Caminho B (Mic) bloqueado:', e);
         }
@@ -294,32 +293,27 @@ async function transitionToMicState() {
     if (activePipWindow) {
         try {
             const { MIC_W: W, MIC_H: H } = CONFIG.UI.WINDOW;
-            const prevX = activePipWindow.screenX;
-            const prevY = activePipWindow.screenY;
 
-            // [CORREÇÃO 3A] Oculta visualmente antes de resgatar (evita flash de branco na PiP).
+            // [NOVO] Determina o alvo de retorno usando a memória espacial.
+            // Fallback: posição da janela de ação atual (melhor que nada).
+            const targetX = lastMicPosition.x !== null ? lastMicPosition.x : activePipWindow.screenX;
+            const targetY = lastMicPosition.y !== null ? lastMicPosition.y : activePipWindow.screenY;
+
             ui.container.style.opacity = '0';
-
-            // [CORREÇÃO 3B] Avança o session ID ANTES de fechar.
             _pipSessionId++;
-
-            // [CORREÇÃO 3C] Resgata o container para o documento principal ANTES de fechar.
             document.body.appendChild(ui.container);
-
-            // Fecha a janela antiga. Container já está em segurança no documento principal.
             activePipWindow.close();
-
-            // Aguarda o ciclo de fechamento.
-            // openPipWindow() restaura opacity e reinicia o visualizador internamente.
             await new Promise(r => setTimeout(r, 80));
-
-            // ui.container.classList já está com 'minimalist-mode' (definido no topo desta função).
             await openPipWindow(W, H);
 
-            try { activePipWindow.moveTo(prevX, prevY); } catch (_) {}
+            // [NOVO] Aguarda adicionalmente para que o SO finalize o
+            // posicionamento inicial da janela PiP antes de movermos.
+            // Mitiga a race condition de criação vs. reposicionamento.
+            await new Promise(r => setTimeout(r, 80));
+            try { activePipWindow.moveTo(targetX, targetY); } catch (_) {}
+
         } catch (e) {
             console.warn('Reopen PiP (Mic) falhou:', e);
-            // Fallback seguro: restaura o container na aba principal.
             ui.container.style.opacity = '';
             if (ui.pipPlaceholder) ui.pipPlaceholder.style.display = 'none';
             document.body.appendChild(ui.container);
