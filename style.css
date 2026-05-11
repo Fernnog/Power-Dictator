@@ -57,6 +57,7 @@ body {
 /* --- MODO MINIMIZADO (WIDGET VERTICAL - v1.0.4) --- */
 /* Transforma a janela em um bloco de notas vertical flutuante */
 .container.minimized {
+    position: relative;         /* ÂNCORA para o contador absoluto */
     padding: 0;
     height: 100vh; 
     width: 100vw;
@@ -103,12 +104,51 @@ body {
 .container.minimized .header-title,
 .container.minimized .badge-pro,
 .container.minimized .subtitle,
-.container.minimized .editor-footer,
 .container.minimized .btn-upload, 
 .container.minimized .device-selector-container,
 .container.minimized .header-actions { 
     display: none !important;
 }
+
+/* ─── CONTADOR FLUTUANTE NO MODO INTERMEDIÁRIO (minimized) ─────────────── */
+
+/* 1. Transforma o rodapé em overlay transparente, ancorado acima do dock.
+      A altura real do dock = 8px padding + 40px botões + 8px padding = 56px. */
+.container.minimized .editor-footer {
+    display: flex !important;
+    position: absolute;
+    bottom: 56px;
+    right: 12px;
+    background: transparent;
+    border: none;
+    padding: 0;
+    pointer-events: none;      /* Cliques atravessam o overlay e atingem o texto */
+    z-index: 10;
+}
+
+/* 2. Oculta TODOS os filhos do rodapé (salvo status, botão foco, etc.)
+      A regra seguinte reexibe apenas o #charCount. */
+.container.minimized .editor-footer > * {
+    display: none !important;
+}
+
+/* 3. Reexibe e estiliza o contador como pílula translúcida minimalista */
+.container.minimized #charCount {
+    display: inline !important;     /* Sobrepõe o display:none do seletor acima */
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.95);  /* Fallback opaco para browsers sem backdrop-filter */
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    padding: 3px 7px;
+    border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.10);
+    border: 1px solid var(--border);
+    pointer-events: auto;           /* Permite seleção do texto do contador se necessário */
+    white-space: nowrap;            /* Garante que "X caracteres" não quebre em duas linhas */
+}
+/* ─────────────────────────────────────────────────────────────────────────── */
 
 /* LIMPEZA VISUAL v2.0: No estado de leitura (minimized), o visualizador
    de ondas não é mais necessário. O espaço é devolvido para a área de texto. */
