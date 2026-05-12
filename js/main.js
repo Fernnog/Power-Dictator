@@ -307,16 +307,11 @@ async function transitionToMicState() {
             await new Promise(r => setTimeout(r, 80));
             await openPipWindow(W, H);
 
-            // Tentativa 1 — 150ms: aguarda a inicialização básica da janela PiP.
-            // Janelas recém-abertas precisam de mais tempo que reabertas (reopen).
-            await new Promise(r => setTimeout(r, 150));
-            try { if (activePipWindow) activePipWindow.moveTo(targetLeft, targetTop); } catch (_) {}
-
-            // Tentativa 2 — +300ms (450ms total): garante que o SO não tenha
-            // sobrescrito a posição após o posicionamento inicial pelo navegador.
-            // Estratégia de dupla-tentativa elimina a dependência de timing do SO.
-            await new Promise(r => setTimeout(r, 300));
-            try { if (activePipWindow) activePipWindow.moveTo(targetLeft, targetTop); } catch (_) {}
+            // [NOVO] Aguarda adicionalmente para que o SO finalize o
+            // posicionamento inicial da janela PiP antes de movermos.
+            // Mitiga a race condition de criação vs. reposicionamento.
+            await new Promise(r => setTimeout(r, 80));
+            try { activePipWindow.moveTo(targetX, targetY); } catch (_) {}
 
         } catch (e) {
             console.warn('Reopen PiP (Mic) falhou:', e);
@@ -939,6 +934,9 @@ window.addEventListener('DOMContentLoaded', () => {
         /** CAMINHO A: Document Picture-in-Picture */
         const handlePiP = async () => {
             const { W, H, targetLeft, targetTop } = calcTargetPosition();
+
+            // Pré-popula a âncora de posição para que transitionToMicState()
+            // retorne ao canto correto durante os ciclos Ação ↔ Mic.
             lastMicPosition = { x: targetLeft, y: targetTop };
 
             try {
@@ -946,31 +944,18 @@ window.addEventListener('DOMContentLoaded', () => {
                 ui.container.classList.add('minimalist-mode');
                 if (ui.pipPlaceholder) ui.pipPlaceholder.style.display = 'flex';
 
-                // ── Fase 1: Abertura inicial ──────────────────────────────────
-                // O navegador posiciona a janela onde quiser (geralmente inf-dir).
-                // moveTo() é ignorado pelo Chrome em aberturas frescas de PiP.
                 await openPipWindow(W, H);
 
-                // ── Fase 2: Reopen com reposicionamento ───────────────────────
-                // Único método comprovado: idêntico ao usado em transitionToMicState().
-                // Opacity 0 evita o flash visual durante o gap entre as duas janelas.
-                ui.container.style.opacity = '0';
-                _pipSessionId++;                    // Invalida o pagehide da Fase 1
-                document.body.appendChild(ui.container);
-                activePipWindow.close();
-
+                // Aguarda o SO finalizar o posicionamento inicial antes de mover.
+                // Padrão já estabelecido em transitionToMicState() (linha ~311).
                 await new Promise(r => setTimeout(r, 80));
-                await openPipWindow(W, H);
-                await new Promise(r => setTimeout(r, 80));
-                try { if (activePipWindow) activePipWindow.moveTo(targetLeft, targetTop); } catch (_) {}
+                try { activePipWindow.moveTo(targetLeft, targetTop); } catch (_) {}
 
             } catch (err) {
+                // Desfaz as classes caso a abertura falhe.
                 ui.container.classList.remove('minimalist-mode');
-                ui.container.style.opacity = '';
                 if (ui.pipPlaceholder) ui.pipPlaceholder.style.display = 'none';
-                if (!document.body.contains(ui.container)) {
-                    document.body.appendChild(ui.container);
-                }
+
                 console.warn('Document PiP bloqueado:', err);
                 ui.statusMsg.textContent = 'Permissão de janela negada pelo navegador.';
                 ui.statusMsg.className   = 'status-bar active status-warning';
