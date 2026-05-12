@@ -64,7 +64,8 @@ const ui = {
    // [NOVO] Modo Foco e PWA
     focusModeBtn: document.getElementById('focusModeBtn'),
     installPwaBtn: document.getElementById('installPwaBtn'),
-    popOutBtn: document.getElementById('popOutBtn'),
+    popOutTopBtn:    document.getElementById('popOutTopBtn'),
+    popOutBottomBtn: document.getElementById('popOutBottomBtn'),
 
     // [INSERIR] Elemento fantasma para o Drag & Drop
     dragImage:      document.getElementById('dragImage'),
@@ -894,63 +895,93 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 
     // ============================================================
-    // MODO COMPACTO — Ponto de entrada único (popOutBtn)
-    // Caminho A: Document Picture-in-Picture (Chrome 116+)
-    // Caminho B: window.open (fallback Firefox/Safari/Edge)
+    // MODO COMPACTO — Controle Direcional (Superior ou Inferior)
+    //
+    // Arquitetura de fábrica: setupCompactModeLaunch recebe o elemento
+    // e a direção desejada, construindo o handler correto para cada botão.
+    //
+    // Caminho A (Document PiP, Chrome 116+):
+    //   - moveTo() é chamado após um delay de 80ms para aguardar o SO
+    //     finalizar o posicionamento inicial da janela PiP.
+    //   - lastMicPosition é pré-populado ANTES de abrir a janela para que
+    //     transitionToMicState() retorne ao canto correto nos ciclos
+    //     Ação ↔ Mic subsequentes.
+    //
+    // Caminho B (window.open — fallback Firefox/Safari/Edge):
+    //   - left/top são passados diretamente na string de features,
+    //     garantindo posicionamento preciso desde a abertura.
     // ============================================================
-    if (ui.popOutBtn) {
 
-        if (_canUsePiP) {
-            // ── CAMINHO A: Document PiP ──────────────────────────
-            ui.popOutBtn.addEventListener('click', async () => {
-                try {
-                    const { MIC_W: W, MIC_H: H } = CONFIG.UI.WINDOW;
+    const setupCompactModeLaunch = (btnElement, positionTarget) => {
+        if (!btnElement) return;
 
-                    // Define o estado inicial ANTES de mover o container para a janela PiP.
-                    ui.container.classList.remove('minimized');
-                    ui.container.classList.add('minimalist-mode');
+        /**
+         * Calcula as coordenadas-alvo com base na direção escolhida.
+         * Usa nullish coalescing (??) para tratar corretamente o valor 0
+         * (tela principal em setup single-monitor), que seria falsy com ||.
+         */
+        const calcTargetPosition = () => {
+            const { MIC_W: W, MIC_H: H } = CONFIG.UI.WINDOW;
+            const screenLeft = window.screen.availLeft ?? 0;
+            const screenTop  = window.screen.availTop  ?? 0;
+            const targetLeft = (screenLeft + window.screen.availWidth) - W - 16;
+            const targetTop  = positionTarget === 'top'
+                ? screenTop + 16
+                : (screenTop + window.screen.availHeight) - H - 16;
+            return { W, H, targetLeft, targetTop };
+        };
 
-                    if (ui.pipPlaceholder) ui.pipPlaceholder.style.display = 'flex';
+        /** CAMINHO A: Document Picture-in-Picture */
+        const handlePiP = async () => {
+            const { W, H, targetLeft, targetTop } = calcTargetPosition();
 
-                    // openPipWindow() cuida de: requestWindow, clonar estilos,
-                    // mover o container e registrar o pagehide via registerPipPagehide().
-                    await openPipWindow(W, H);
+            // Pré-popula a âncora de posição para que transitionToMicState()
+            // retorne ao canto correto durante os ciclos Ação ↔ Mic.
+            lastMicPosition = { x: targetLeft, y: targetTop };
 
-                } catch (err) {
-                    // Desfaz as classes caso a abertura falhe.
-                    ui.container.classList.remove('minimalist-mode');
-                    if (ui.pipPlaceholder) ui.pipPlaceholder.style.display = 'none';
+            try {
+                ui.container.classList.remove('minimized');
+                ui.container.classList.add('minimalist-mode');
+                if (ui.pipPlaceholder) ui.pipPlaceholder.style.display = 'flex';
 
-                    console.warn('Document PiP bloqueado:', err);
-                    ui.statusMsg.textContent = 'Permissão de janela negada pelo navegador.';
-                    ui.statusMsg.className   = 'status-bar active status-warning';
-                    setTimeout(() => {
-                        ui.statusMsg.textContent = '';
-                        ui.statusMsg.className   = 'status-bar';
-                    }, 4000);
-                }
-            });
+                await openPipWindow(W, H);
 
-        } else {
-            // ── CAMINHO B: window.open (fallback) ────────────────
-            // Abre pequeno (110×110) no Estado Mic inicial.
-            // resizeTo() funciona normalmente em popups window.open convencionais.
-            ui.popOutBtn.addEventListener('click', () => {
-                const { MIC_W: W, MIC_H: H } = CONFIG.UI.WINDOW;
-                const screenLeft = window.screen.availLeft || 0;
-                const screenTop  = window.screen.availTop  || 0;
-                const left = (screenLeft + window.screen.availWidth)  - W - 16;
-                const top  = (screenTop  + window.screen.availHeight) - H - 16;
+                // Aguarda o SO finalizar o posicionamento inicial antes de mover.
+                // Padrão já estabelecido em transitionToMicState() (linha ~311).
+                await new Promise(r => setTimeout(r, 80));
+                try { activePipWindow.moveTo(targetLeft, targetTop); } catch (_) {}
 
-                window.open(
-                    window.location.pathname + '?mode=compact-mic',
-                    'DitadoWidget',
-                    `width=${W},height=${H},left=${left},top=${top},popup=yes,` +
-                    `resizable=yes,scrollbars=no,toolbar=no,menubar=no,status=no`
-                );
-            });
-        }
-    }
+            } catch (err) {
+                // Desfaz as classes caso a abertura falhe.
+                ui.container.classList.remove('minimalist-mode');
+                if (ui.pipPlaceholder) ui.pipPlaceholder.style.display = 'none';
+
+                console.warn('Document PiP bloqueado:', err);
+                ui.statusMsg.textContent = 'Permissão de janela negada pelo navegador.';
+                ui.statusMsg.className   = 'status-bar active status-warning';
+                setTimeout(() => {
+                    ui.statusMsg.textContent = '';
+                    ui.statusMsg.className   = 'status-bar';
+                }, 4000);
+            }
+        };
+
+        /** CAMINHO B: window.open (fallback) */
+        const handleWindowOpen = () => {
+            const { W, H, targetLeft, targetTop } = calcTargetPosition();
+            window.open(
+                window.location.pathname + '?mode=compact-mic',
+                'DitadoWidget',
+                `width=${W},height=${H},left=${targetLeft},top=${targetTop},popup=yes,` +
+                `resizable=yes,scrollbars=no,toolbar=no,menubar=no,status=no`
+            );
+        };
+
+        btnElement.addEventListener('click', _canUsePiP ? handlePiP : handleWindowOpen);
+    };
+
+    setupCompactModeLaunch(ui.popOutTopBtn,    'top');
+    setupCompactModeLaunch(ui.popOutBottomBtn, 'bottom');
 
     // ── Detecção de contexto via parâmetro URL ────────────────────
     const urlParams = new URLSearchParams(window.location.search);
