@@ -307,11 +307,16 @@ async function transitionToMicState() {
             await new Promise(r => setTimeout(r, 80));
             await openPipWindow(W, H);
 
-            // [NOVO] Aguarda adicionalmente para que o SO finalize o
-            // posicionamento inicial da janela PiP antes de movermos.
-            // Mitiga a race condition de criação vs. reposicionamento.
-            await new Promise(r => setTimeout(r, 80));
-            try { activePipWindow.moveTo(targetX, targetY); } catch (_) {}
+            // Tentativa 1 — 150ms: aguarda a inicialização básica da janela PiP.
+            // Janelas recém-abertas precisam de mais tempo que reabertas (reopen).
+            await new Promise(r => setTimeout(r, 150));
+            try { if (activePipWindow) activePipWindow.moveTo(targetLeft, targetTop); } catch (_) {}
+
+            // Tentativa 2 — +300ms (450ms total): garante que o SO não tenha
+            // sobrescrito a posição após o posicionamento inicial pelo navegador.
+            // Estratégia de dupla-tentativa elimina a dependência de timing do SO.
+            await new Promise(r => setTimeout(r, 300));
+            try { if (activePipWindow) activePipWindow.moveTo(targetLeft, targetTop); } catch (_) {}
 
         } catch (e) {
             console.warn('Reopen PiP (Mic) falhou:', e);
