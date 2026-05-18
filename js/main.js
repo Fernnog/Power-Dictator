@@ -79,50 +79,113 @@ let undoTimeout = null;
 let tempDeletedText = '';
 
 // ============================================================
-// UTILITÁRIO DE REPOSICIONAMENTO RESISTENTE A RACE CONDITIONS
+// UTILITÁRIO DE REPOSICIONAMENTO — EXECUÇÃO INTERNA NA JANELA PiP
 //
-// O Chrome força toda janela PiP recém-criada para o canto
-// inferior direito com uma animação nativa do SO. Qualquer
-// chamada única a moveTo() nesse gap de tempo é silenciosamente
-// ignorada pelo browser. Esta função resolve o problema com um
-// loop de tentativas que insiste até que a janela confirme a
-// chegada às coordenadas-alvo, ou até esgotar o limite de
-// tentativas — o que ocorrer primeiro.
+// POR QUE INJEÇÃO DE SCRIPT?
+// O Chrome trata chamadas moveTo() de forma diferente dependendo
+// do contexto de execução:
 //
-// É a ÚNICA fonte de verdade para reposicionamento de janelas
-// PiP no projeto. Todos os pontos que antes chamavam moveTo()
-// diretamente agora delegam a esta função.
+//   - EXTERNO (aba principal → activePipWindow.moveTo()):
+//     O Chrome silencia a instrução, pois a janela PiP é gerenciada
+//     pelo sistema de Picture-in-Picture do navegador, que rejeita
+//     reposicionamentos de contextos externos após a animação inicial.
 //
-// @param {Window} win              - Referência à janela PiP.
-// @param {number} targetLeft       - Coordenada X desejada (px).
-// @param {number} targetTop        - Coordenada Y desejada (px).
-// @param {number} [maxAttempts=5]  - Limite de tentativas.
-// @param {number} [intervalMs=150] - Intervalo entre tentativas (ms).
+//   - INTERNO (window.moveTo() de dentro da própria janela PiP):
+//     O Chrome reconhece a instrução como legítima e executa o
+//     reposicionamento.
+//
+// A solução é criar um <script> no documento da janela PiP para
+// que o moveTo() seja chamado a partir do contexto correto.
+//
+// DIAGNÓSTICO ATIVO: Esta função emite logs no console (F12).
+// Abra o DevTools ANTES de clicar nos botões para ver:
+//   - As coordenadas calculadas para cada canto
+//   - A posição real da janela a cada tentativa
+//   - Se a chegada foi confirmada ou o limite atingido
+// Esses logs podem ser removidos após a validação.
+//
+// @param {Window} win         - Referência à janela PiP.
+// @param {number} targetLeft  - Coordenada X desejada (px).
+// @param {number} targetTop   - Coordenada Y desejada (px).
 // ============================================================
-function reliableMoveTo(win, targetLeft, targetTop, maxAttempts = 5, intervalMs = 150) {
+function injectMoveScript(win, targetLeft, targetTop) {
+    if (!win || win.closed) return;
+
+    // [DIAGNÓSTICO] Log no console da aba principal — confirma os valores calculados
+    console.log(
+        '[PiP] injectMoveScript chamado.' +
+        '\n  Alvo → left: ' + targetLeft + 'px, top: ' + targetTop + 'px' +
+        '\n  Tela (aba principal) → availLeft: ' + window.screen.availLeft +
+        ', availTop: ' + window.screen.availTop +
+        ', availWidth: ' + window.screen.availWidth +
+        ', availHeight: ' + window.screen.availHeight
+    );
+
+    try {
+        // Serializa os valores como inteiros para uso seguro dentro do script injetado
+        const x   = targetLeft | 0;
+        const y   = targetTop  | 0;
+        const max = 8;    // tentativas máximas (8 × 150ms = 1200ms de janela)
+        const ms  = 150;  // intervalo entre tentativas em ms
+        const tol = 32;   // tolerância de posição em pixels (cobre variações de DPI)
+
+        const script = win.document.createElement('script');
+        script.textContent = `
+(function() {
+  var x = ${x}, y = ${y}, max = ${max}, tol = ${tol}, n = 0;
+  console.log('[PiP Interno] Script injetado. Alvo: left=' + x + 'px, top=' + y + 'px');
+  var t = setInterval(function() {
+    window.moveTo(x, y);
+    console.log(
+      '[PiP Interno] Tentativa ' + (n + 1) + '/' + max +
+      ' | screenX=' + window.screenX + ', screenY=' + window.screenY +
+      ' | alvo: left=' + x + ', top=' + y
+    );
+    n++;
+    var chegou = Math.abs(window.screenX - x) <= tol
+              && Math.abs(window.screenY - y) <= tol;
+    if (chegou) {
+      console.log('[PiP Interno] Posicao confirmada na tentativa ' + n + '. Loop encerrado.');
+      clearInterval(t);
+    } else if (n >= max) {
+      console.warn(
+        '[PiP Interno] Limite de tentativas atingido sem confirmar posicao.' +
+        ' Posicao final: screenX=' + window.screenX + ', screenY=' + window.screenY
+      );
+      clearInterval(t);
+    }
+  }, ${ms});
+})();
+        `.trim();
+
+        win.document.head.appendChild(script);
+
+    } catch (err) {
+        // Fallback: se a injeção for bloqueada (ex: CSP restritiva no servidor),
+        // tenta o moveTo() externo como último recurso.
+        console.warn('[PiP] Injeção de script bloqueada. Tentando moveTo() externo (fallback):', err);
+        _externalMoveTo(win, targetLeft, targetTop);
+    }
+}
+
+/**
+ * Fallback de último recurso: chama moveTo() do contexto externo (aba principal).
+ * Ativado apenas se injectMoveScript() falhar por restrição de CSP.
+ * Mantido como segurança — não é o caminho principal.
+ */
+function _externalMoveTo(win, targetLeft, targetTop) {
     let attempts = 0;
     const timer = setInterval(() => {
-        // Cancela imediatamente se a janela foi fechada entre ticks.
-        if (!win || win.closed) {
-            clearInterval(timer);
-            return;
-        }
-
+        if (!win || win.closed) { clearInterval(timer); return; }
         try { win.moveTo(targetLeft, targetTop); } catch (_) {}
-
         attempts++;
-
-        // Early exit: verifica se a janela já está na posição correta
-        // dentro de uma tolerância de 32px (cobre variações de DPI,
-        // bordas decorativas do SO e configurações de escala).
-        const tolerance = 32;
-        const arrived = Math.abs(win.screenX - targetLeft) <= tolerance
-                     && Math.abs(win.screenY - targetTop)  <= tolerance;
-
-        if (arrived || attempts >= maxAttempts) {
-            clearInterval(timer);
-        }
-    }, intervalMs);
+        let sx, sy;
+        try { sx = win.screenX; sy = win.screenY; } catch (_) { sx = null; sy = null; }
+        const arrived = sx !== null
+            && Math.abs(sx - targetLeft) <= 32
+            && Math.abs(sy - targetTop)  <= 32;
+        if (arrived || attempts >= 8) clearInterval(timer);
+    }, 150);
 }
 
 // ============================================================
@@ -135,12 +198,10 @@ function reliableMoveTo(win, targetLeft, targetTop, maxAttempts = 5, intervalMs 
  * uma janela flutuante (PiP ou popup window.open).
  */
 function isInFloatingWindow() {
-    // Verifica PiP: o container foi movido para o documento da janela PiP
     const pipWin = (typeof documentPictureInPicture !== 'undefined')
         ? documentPictureInPicture?.window
         : null;
     if (pipWin && pipWin.document === ui.container.ownerDocument) return true;
-    // Verifica popup: esta página foi aberta pelo fallback window.open
     if (activeExternalWindow) return true;
     return false;
 }
@@ -183,8 +244,6 @@ async function openPipWindow(width, height) {
     });
     activePipWindow = pipWin;
 
-    // Captura o ID da sessão NESTE momento. O handler pagehide abaixo
-    // usa este snapshot para detectar se foi disparado por um pip obsoleto.
     const capturedSessionId = _pipSessionId;
 
     cloneStylesToPipWindow(pipWin);
@@ -192,35 +251,24 @@ async function openPipWindow(width, height) {
     pipWin.document.body.appendChild(ui.container);
 
     // [CORREÇÃO 1A] Restaura a opacidade do container após a transferência.
-    // As funções de transição (Ação/Mic) a zeraram antes do resgate para
-    // evitar o flash de tela branca na janela PiP durante o gap de ~80ms.
     ui.container.style.opacity = '';
 
     // [CORREÇÃO 1B] Reinicia o loop de animação do visualizador de áudio.
-    // O requestAnimationFrame vinculado ao contexto da janela anterior
-    // é encerrado pelo browser ao fechar a janela; este requestAnimationFrame
-    // força o SpeechManager a recapturar o canvas no novo documento.
     if (typeof speechManager !== 'undefined' && speechManager?.refreshVisualizer) {
         requestAnimationFrame(() => speechManager.refreshVisualizer());
     }
 
     pipWin.addEventListener('pagehide', () => {
-        // [CORREÇÃO 1C] Guarda de identidade: antes de zerar o ponteiro global,
-        // verifica se ele ainda aponta para ESTA janela. Impede race condition
-        // onde o pagehide de uma janela antiga dispara com atraso e corrompe
-        // silenciosamente o ponteiro da sessão nova que já foi registrada.
+        // [CORREÇÃO 1C] Guarda de identidade.
         if (activePipWindow === pipWin) activePipWindow = null;
 
-        // Se _pipSessionId avançou desde que este handler foi registrado,
-        // este pagehide veio de um pip antigo (reopen programático).
-        // Ignorar: o novo pip já está ativo com o container.
         if (_pipSessionId !== capturedSessionId) return;
 
         // Fechamento manual pelo usuário — restaurar normalmente.
         if (ui.pipPlaceholder) ui.pipPlaceholder.style.display = 'none';
         document.body.appendChild(ui.container);
         ui.container.classList.remove('minimalist-mode', 'minimized');
-        ui.container.style.opacity = ''; // limpeza defensiva em qualquer path de retorno
+        ui.container.style.opacity = '';
         setUIMode(false);
         requestAnimationFrame(() => {
             if (ui.textarea) ui.textarea.scrollTop = ui.textarea.scrollHeight;
@@ -233,16 +281,10 @@ async function openPipWindow(width, height) {
 /**
  * Estado Mic → Estado Ação.
  * Ativado quando a transcrição retorna texto.
- *
- * Caminho B (window.open): resizeTo() funciona — geometria centrada no ponto médio atual.
- * Caminho A (Document PiP): resizeTo() é bloqueado — usamos a estratégia de Reopen PiP.
  */
 async function transitionToActionState() {
     if (!ui.container.classList.contains('minimalist-mode')) return;
 
-    // [NOVO] Captura as coordenadas do microfone ANTES de qualquer
-    // alteração de classe ou reopen de janela. Esta é a "fotografia"
-    // que transitionToMicState() usará para retornar ao ponto exato.
     const currentWin = activeExternalWindow || activePipWindow;
     if (currentWin) {
         lastMicPosition.x = currentWin.screenX;
@@ -256,7 +298,6 @@ async function transitionToActionState() {
     if (activeExternalWindow) {
         try {
             const { ACTION_W: W, ACTION_H: H } = CONFIG.UI.WINDOW;
-            // Ancora no centro geométrico da janela atual para expansão fluida.
             const cx = activeExternalWindow.screenX + (activeExternalWindow.outerWidth  / 2);
             const cy = activeExternalWindow.screenY + (activeExternalWindow.outerHeight / 2);
             activeExternalWindow.resizeTo(W, H);
@@ -274,8 +315,6 @@ async function transitionToActionState() {
     if (activePipWindow) {
         try {
             const { ACTION_W: W, ACTION_H: H } = CONFIG.UI.WINDOW;
-            // prevX/prevY: posiciona a *janela de ação* onde estava o microfone.
-            // Mantido independente do lastMicPosition — são propósitos distintos.
             const prevX = activePipWindow.screenX;
             const prevY = activePipWindow.screenY;
 
@@ -286,10 +325,8 @@ async function transitionToActionState() {
             await new Promise(r => setTimeout(r, 80));
             await openPipWindow(W, H);
 
-            // [CORREÇÃO] Substitui o moveTo() direto por reliableMoveTo(),
-            // garantindo que o reposicionamento da janela de Ação também
-            // resista à race condition do SO nos ciclos subsequentes.
-            reliableMoveTo(activePipWindow, prevX, prevY);
+            // Reposiciona via injeção interna — único método confiável no Chrome
+            injectMoveScript(activePipWindow, prevX, prevY);
 
             requestAnimationFrame(() => {
                 if (ui.textarea) ui.textarea.scrollTop = ui.textarea.scrollHeight;
@@ -308,9 +345,6 @@ async function transitionToActionState() {
 /**
  * Estado Ação → Estado Mic.
  * Ativado pelo botão "Limpar". Só executa dentro de uma janela flutuante.
- *
- * Caminho B (window.open): resizeTo() funciona — encolhe a janela de volta.
- * Caminho A (Document PiP): resizeTo() é bloqueado — usamos a estratégia de Reopen PiP.
  */
 async function transitionToMicState() {
     if (!isInFloatingWindow()) return;
@@ -325,9 +359,6 @@ async function transitionToMicState() {
             const { MIC_W: W, MIC_H: H } = CONFIG.UI.WINDOW;
             activeExternalWindow.resizeTo(W, H);
 
-            // [NOVO] Restaura a posição memorizada do microfone.
-            // Fallback: centraliza na janela atual caso lastMicPosition não exista
-            // (ex: primeira gravação da sessão antes de qualquer arrasto).
             if (lastMicPosition.x !== null && lastMicPosition.y !== null) {
                 activeExternalWindow.moveTo(lastMicPosition.x, lastMicPosition.y);
             } else {
@@ -346,8 +377,6 @@ async function transitionToMicState() {
         try {
             const { MIC_W: W, MIC_H: H } = CONFIG.UI.WINDOW;
 
-            // [NOVO] Determina o alvo de retorno usando a memória espacial.
-            // Fallback: posição da janela de ação atual (melhor que nada).
             const targetX = lastMicPosition.x !== null ? lastMicPosition.x : activePipWindow.screenX;
             const targetY = lastMicPosition.y !== null ? lastMicPosition.y : activePipWindow.screenY;
 
@@ -358,11 +387,9 @@ async function transitionToMicState() {
             await new Promise(r => setTimeout(r, 80));
             await openPipWindow(W, H);
 
-            // [CORREÇÃO] Substitui os dois setTimeout(80ms) + moveTo() direto
-            // por reliableMoveTo(). Resolve a race condition que fazia a janela
-            // ignorar o retorno ao canto superior nos ciclos Ação → Mic,
-            // mantendo a consistência de posicionamento ao longo de toda a sessão.
-            reliableMoveTo(activePipWindow, targetX, targetY);
+            // Reposiciona via injeção interna — garante que os ciclos Ação ↔ Mic
+            // retornem ao canto correto (superior ou inferior) ao longo de toda a sessão.
+            injectMoveScript(activePipWindow, targetX, targetY);
 
         } catch (e) {
             console.warn('Reopen PiP (Mic) falhou:', e);
@@ -570,7 +597,6 @@ ui.micBtn.addEventListener('click', () => {
 if (ui.focusModeBtn) {
     ui.focusModeBtn.addEventListener('click', () => {
         ui.container.classList.toggle('focus-mode');
-        // Rola para o fim do texto ao expandir
         ui.textarea.scrollTop = ui.textarea.scrollHeight;
     });
 }
@@ -602,14 +628,8 @@ ui.btnAiFix.addEventListener('click', () => {
             const result = await aiService.fixGrammar(text);
             ui.textarea.value = result;
             saveContent();
-            // Limpa "PROCESSANDO IA..." imediatamente após o sucesso.
-            // NOTA: updateStatus('success') foi removido pois não é um estado
-            // reconhecido pela função — causava limpeza imediata de qualquer forma.
-            // A linha showPopoverIfMinimalist() foi REMOVIDA: era a causa do
-            // ReferenceError que gerava o alerta falso de "Erro na IA".
             updateStatus('');
         } catch (error) {
-            // Este catch agora só captura erros reais da API de IA.
             alert("Erro na IA (Llama/Groq): " + error.message);
             updateStatus('error');
             setTimeout(() => updateStatus(''), 2000);
@@ -650,7 +670,6 @@ ui.btnCopy.addEventListener('click', () => {
 
         const textToCopy = ui.textarea.value;
 
-        // ── RESOLUÇÃO DE CONTEXTO ─────────────────────────────────────────
         const targetWindow = ui.textarea.ownerDocument.defaultView;
 
         try {
@@ -683,7 +702,6 @@ ui.btnCopy.addEventListener('click', () => {
             }
         }
 
-        // ── FEEDBACK VISUAL ────────────────────────────────────────
         const span = ui.btnCopy.querySelector('span');
         const originalText = span ? span.textContent : 'Copiar';
 
@@ -700,42 +718,27 @@ ui.btnCopy.addEventListener('click', () => {
 
 // -------------------------------------------------------
 // DRAG & DROP — Transferência de texto para apps externos
-// Ativado apenas em dispositivos com suporte a ponteiro
-// (desktops). Desativado silenciosamente em touch/mobile.
 // -------------------------------------------------------
 const supportsHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 
 if (supportsHover) {
-    // Habilita o arraste apenas onde faz sentido
     ui.btnCopy.setAttribute('draggable', 'true');
 
     ui.btnCopy.addEventListener('dragstart', (e) => {
         const textToDrag = ui.textarea.value.trim();
 
-        // Aborta silenciosamente se não houver conteúdo
         if (!textToDrag) {
             e.preventDefault();
             return;
         }
 
-        // Define o dado a ser transferido ao sistema operacional
         e.dataTransfer.setData('text/plain', textToDrag);
-
-        // Sinaliza ao app de destino que esta é uma operação de cópia
         e.dataTransfer.effectAllowed = 'copy';
-
-        // Substitui a imagem fantasma padrão (miniatura do botão)
-        // por um elemento invisível (1x1px), tornando o arraste discreto
         e.dataTransfer.setDragImage(ui.dragImage, 0, 0);
     });
 
     ui.btnCopy.addEventListener('dragend', (e) => {
-        // dropEffect === 'none' significa que o usuário soltou
-        // em um destino que não aceitou o drop (ou cancelou com Esc)
-        if (e.dataTransfer.dropEffect === 'none') {
-            // Informa o usuário de forma não invasiva, se desejar (opcional)
-        }
-        // Nenhum reset de opacity necessário — o CSS :active trata o feedback visual
+        if (e.dataTransfer.dropEffect === 'none') {}
     });
 }
 
@@ -748,13 +751,10 @@ function handleClearAction() {
     saveContent();
     updateCharCount();
 
-    // Toast de desfazer apenas no modo normal
-    // (no modo flutuante não há como exibi-lo de forma confiável)
     if (!isInFloatingWindow()) {
         showUndoToast();
     }
 
-    // Gatilho do ciclo: retorna ao Estado Mic
     transitionToMicState();
 }
 
@@ -814,21 +814,13 @@ function performUndo() {
 // 8. REDIMENSIONAMENTO E ESTADO DA JANELA
 // ========================================================
 
-/**
- * Define o estado visual da interface de forma centralizada.
- * Deve ser a ÚNICA função a manipular o modo compacto/completo da UI.
- *
- * @param {boolean} isMinimized - true para modo compacto, false para modo completo.
- */
 function setUIMode(isMinimized) {
-    // 1. Controla a classe de layout no container principal
     if (isMinimized) {
         ui.container.classList.add('minimized');
     } else {
         ui.container.classList.remove('minimized');
     }
 
-    // 2. Controla a visibilidade dos ícones via classList (nunca inline style)
     const iconMinimize = ui.container.querySelector('#iconMinimize');
     const iconMaximize = ui.container.querySelector('#iconMaximize');
 
@@ -839,10 +831,7 @@ function setUIMode(isMinimized) {
         iconMaximize.classList.toggle('icon-hidden', !isMinimized);
     }
 
-    // 3. Redimensionamento da Janela (Aba ou Standalone)
-    //    Ignora se estivermos dentro de um contexto PiP, onde o tamanho é fixo.
     const isPip = !!window.documentPictureInPicture?.window;
-    // Evita que setUIMode redimensione quando esta página É o popup flutuante
     const isOwnPopup = (activeExternalWindow === window);
     
     if (window.outerWidth && !isPip && !isOwnPopup) {
@@ -873,14 +862,12 @@ function setUIMode(isMinimized) {
 }
 
 ui.toggleSizeBtn.addEventListener('click', () => {
-    // Verificação de Contexto PiP
     const pipWindow = window.documentPictureInPicture?.window;
     if (pipWindow && ui.toggleSizeBtn.ownerDocument === pipWindow.document) {
         pipWindow.close();
         return;
     }
 
-    // Delegação para a fonte de verdade centralizada
     const isCurrentlyMinimized = ui.container.classList.contains('minimized');
     setUIMode(!isCurrentlyMinimized);
 });
@@ -948,33 +935,20 @@ window.addEventListener('DOMContentLoaded', () => {
     // ============================================================
     // MODO COMPACTO — Controle Direcional (Superior ou Inferior)
     //
-    // Arquitetura de fábrica: setupCompactModeLaunch recebe o elemento
-    // e a direção desejada, construindo o handler correto para cada botão.
-    //
     // Caminho A (Document PiP, Chrome 116+):
-    //   - reliableMoveTo() é chamado após openPipWindow() para superar
-    //     a race condition da animação nativa do SO, que posiciona a janela
-    //     no canto inferior direito antes de liberar o controle ao JS.
-    //     O loop de tentativas (até 5x a cada 150ms) garante que o comando
-    //     seja executado assim que o Chrome liberar a janela, tanto na
-    //     abertura inicial quanto nos ciclos Ação ↔ Mic subsequentes.
-    //   - lastMicPosition é pré-populado ANTES de abrir a janela para que
-    //     transitionToMicState() retorne ao canto correto nos ciclos
-    //     Ação ↔ Mic subsequentes.
+    //   - injectMoveScript() injeta o reposicionamento no contexto
+    //     interno da janela PiP — única forma confiável de chamar
+    //     moveTo() no Chrome, pois chamadas externas são ignoradas.
+    //   - lastMicPosition pré-populado para preservar o canto correto
+    //     nos ciclos Ação ↔ Mic subsequentes.
     //
     // Caminho B (window.open — fallback Firefox/Safari/Edge):
-    //   - left/top são passados diretamente na string de features,
-    //     garantindo posicionamento preciso desde a abertura.
+    //   - left/top passados diretamente na string de features.
     // ============================================================
 
     const setupCompactModeLaunch = (btnElement, positionTarget) => {
         if (!btnElement) return;
 
-        /**
-         * Calcula as coordenadas-alvo com base na direção escolhida.
-         * Usa nullish coalescing (??) para tratar corretamente o valor 0
-         * (tela principal em setup single-monitor), que seria falsy com ||.
-         */
         const calcTargetPosition = () => {
             const { MIC_W: W, MIC_H: H } = CONFIG.UI.WINDOW;
             const screenLeft = window.screen.availLeft ?? 0;
@@ -990,8 +964,6 @@ window.addEventListener('DOMContentLoaded', () => {
         const handlePiP = async () => {
             const { W, H, targetLeft, targetTop } = calcTargetPosition();
 
-            // Pré-popula a âncora de posição para que transitionToMicState()
-            // retorne ao canto correto durante os ciclos Ação ↔ Mic.
             lastMicPosition = { x: targetLeft, y: targetTop };
 
             try {
@@ -1001,15 +973,12 @@ window.addEventListener('DOMContentLoaded', () => {
 
                 await openPipWindow(W, H);
 
-                // [CORREÇÃO] Substitui o setTimeout(80ms) + moveTo() direto por
-                // reliableMoveTo(). O Chrome força o PiP ao canto inferior direito
-                // com uma animação do SO. Uma única chamada nesse gap é ignorada.
-                // O loop de tentativas insiste até a janela confirmar a chegada
-                // às coordenadas-alvo, resolvendo o bug do botão Superior.
-                reliableMoveTo(activePipWindow, targetLeft, targetTop);
+                // Injeta o script de reposicionamento no contexto interno
+                // da janela PiP — contorna a restrição do Chrome que ignora
+                // chamadas moveTo() vindas de contextos externos.
+                injectMoveScript(activePipWindow, targetLeft, targetTop);
 
             } catch (err) {
-                // Desfaz as classes caso a abertura falhe.
                 ui.container.classList.remove('minimalist-mode');
                 if (ui.pipPlaceholder) ui.pipPlaceholder.style.display = 'none';
 
@@ -1043,7 +1012,6 @@ window.addEventListener('DOMContentLoaded', () => {
     // ── Detecção de contexto via parâmetro URL ────────────────────
     const urlParams = new URLSearchParams(window.location.search);
 
-    // Modo Compacto (antigo): abre como widget com texto + botões
     if (urlParams.get('mode') === 'compact') {
         setTimeout(() => {
             if (!ui.container.classList.contains('minimized')) {
@@ -1052,10 +1020,8 @@ window.addEventListener('DOMContentLoaded', () => {
         }, 100);
     }
 
-    // Modo Compacto Mic: popup do Caminho B, inicia no Estado Mic
     if (urlParams.get('mode') === 'compact-mic') {
         document.body.classList.add('is-pip-mode');
-        // Define que esta página É a janela flutuante (habilita resizeTo no popup)
         activeExternalWindow = window;
         setTimeout(() => {
             ui.container.classList.remove('minimized');
