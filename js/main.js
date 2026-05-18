@@ -64,7 +64,6 @@ const ui = {
    // [NOVO] Modo Foco e PWA
     focusModeBtn: document.getElementById('focusModeBtn'),
     installPwaBtn: document.getElementById('installPwaBtn'),
-    popOutTopBtn:    document.getElementById('popOutTopBtn'),
     popOutBottomBtn: document.getElementById('popOutBottomBtn'),
 
     // [INSERIR] Elemento fantasma para o Drag & Drop
@@ -1006,7 +1005,6 @@ window.addEventListener('DOMContentLoaded', () => {
         btnElement.addEventListener('click', _canUsePiP ? handlePiP : handleWindowOpen);
     };
 
-    setupCompactModeLaunch(ui.popOutTopBtn,    'top');
     setupCompactModeLaunch(ui.popOutBottomBtn, 'bottom');
 
     // ── Detecção de contexto via parâmetro URL ────────────────────

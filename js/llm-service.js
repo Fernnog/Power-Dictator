@@ -62,9 +62,16 @@ class LlamaTextService {
             }
 
             const data = await response.json();
-            const content = data.choices[0].message.content.trim();
+            let content = data.choices[0].message.content.trim();
 
-            return content.replace(/^"|"$/g, '').trim();
+            // [NOVO] PIPELINE DE SANITIZAÇÃO ESTRUTURAL
+            // 1. Limpa aspas indesejadas (legado mantido)
+            content = content.replace(/^"|"$/g, '').trim();
+            
+            // 2. Extrai texto de dentro de blocos Markdown (```), descartando o lixo ao redor
+            content = content.replace(/^```[\w]*\r?\n?([\s\S]*?)\r?\n?```[\s\S]*$/i, '$1').trim();
+
+            return content;
 
         } catch (error) {
             console.error("Llama Service Error:", error);
@@ -73,43 +80,26 @@ class LlamaTextService {
     }
 
     async fixGrammar(text) {
-        // PROMPT REFATORADO v2.0
-        // Objetivo: revisão holística com intervenção mínima e preservação de autoria.
-        // Contexto operacional: modelo llama-3.3-70b-versatile, temperature 0.0.
-        const systemPrompt = `Você é um revisor textual sênior especializado em português brasileiro. Sua função é aprimorar o texto de forma cirúrgica, respeitando rigorosamente a voz e a autoria do escritor.
+        // Prompt otimizado para velocidade (Groq/Flash)
+        const systemPrompt = `Você é um revisor textual cirúrgico (pt-BR).
+MISSÃO: Corrigir pontuação, concordância e ortografia.
+REGRA DE OURO: Intervenção mínima. Preserve a voz do autor.
+SAÍDA CRÍTICA: Devolva APENAS o texto revisado. Não use blocos de código (markdown), aspas, saudações ou notas.`;
 
-PROTOCOLO DE REVISÃO (execute nesta ordem):
-1. LEITURA GLOBAL: Leia o texto inteiro antes de qualquer intervenção. Identifique o tema central, o argumento e a intenção comunicativa do autor.
-2. COESÃO E COERÊNCIA: Verifique se as frases e parágrafos se conectam logicamente. Se a sequência de ideias estiver quebrada ou um conectivo estiver errado, corrija apenas o ponto problemático. Não reorganize parágrafos inteiros.
-3. GRAMÁTICA E ORTOGRAFIA: Corrija erros de concordância, regência, pontuação e ortografia.
-4. PRESERVAÇÃO DE AUTORIA — REGRA MAIS IMPORTANTE: Se uma frase estiver gramaticalmente correta e compreensível, mesmo que você prefira outra construção, NÃO a altere. Mantenha o vocabulário, o tom e o estilo do autor. A intervenção mínima é a meta.
-
-RESTRIÇÕES ABSOLUTAS:
-- O texto sempre estará em português brasileiro.
-- NUNCA converse, cumprimente, confirme a tarefa ou explique as alterações realizadas.
-- Devolva APENAS o texto revisado. Nenhuma aspas, introdução, nota ou comentário.`;
-
-        const userPrompt = `Revise o texto delimitado por triplos acentos graves seguindo o protocolo estabelecido:
-\`\`\`
-${text}
-\`\`\``;
+        // Removidos os delimitadores \`\`\` para não estimular formatação de código
+        const userPrompt = `Revise o texto a seguir: \n\n${text}`;
 
         return await this.generate(systemPrompt, userPrompt);
     }
 
     async convertToLegal(text) {
-        const systemPrompt = `Você é um Assessor Jurídico especializado na Justiça do Trabalho brasileira, redigindo minutas de votos de acórdãos para uma Desembargadora.
-Sua função é reescrever o texto adotando o padrão culto e formal do judiciário, mas aplicando o princípio da "Linguagem Simples".
-REGRAS ABSOLUTAS:
-1. Mantenha a elevação e a precisão técnica exigidas em um acórdão.
-2. Acessibilidade: EVITE jargões herméticos, latinismos desnecessários ou termos arcaicos. O jurisdicionado (trabalhador/empresa) deve compreender a decisão.
-3. Coesão: Melhore a fluidez e a clareza da argumentação.
-4. NUNCA converse, cumprimente ou adicione comentários. Devolva APENAS o texto processado.`;
+        const systemPrompt = `Você é um Assessor Jurídico Trabalhista.
+MISSÃO: Elevar a formalidade do texto para o padrão judiciário.
+REGRA DE OURO: Aplique "Linguagem Simples". Sem latinismos herméticos, foque na coesão argumentativa.
+SAÍDA CRÍTICA: Devolva APENAS o texto revisado. Não use blocos de código (markdown), aspas, saudações ou notas.`;
 
-        const userPrompt = `Reescreva o texto delimitado por triplos acentos graves para a formalidade acessível da Justiça do Trabalho:
-\`\`\`
-${text}
-\`\`\``;
+        // Vulnerabilidade corrigida: delimitadores removidos
+        const userPrompt = `Reescreva o texto a seguir: \n\n${text}`;
 
         return await this.generate(systemPrompt, userPrompt);
     }
