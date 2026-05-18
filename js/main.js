@@ -79,6 +79,53 @@ let undoTimeout = null;
 let tempDeletedText = '';
 
 // ============================================================
+// UTILITÁRIO DE REPOSICIONAMENTO RESISTENTE A RACE CONDITIONS
+//
+// O Chrome força toda janela PiP recém-criada para o canto
+// inferior direito com uma animação nativa do SO. Qualquer
+// chamada única a moveTo() nesse gap de tempo é silenciosamente
+// ignorada pelo browser. Esta função resolve o problema com um
+// loop de tentativas que insiste até que a janela confirme a
+// chegada às coordenadas-alvo, ou até esgotar o limite de
+// tentativas — o que ocorrer primeiro.
+//
+// É a ÚNICA fonte de verdade para reposicionamento de janelas
+// PiP no projeto. Todos os pontos que antes chamavam moveTo()
+// diretamente agora delegam a esta função.
+//
+// @param {Window} win              - Referência à janela PiP.
+// @param {number} targetLeft       - Coordenada X desejada (px).
+// @param {number} targetTop        - Coordenada Y desejada (px).
+// @param {number} [maxAttempts=5]  - Limite de tentativas.
+// @param {number} [intervalMs=150] - Intervalo entre tentativas (ms).
+// ============================================================
+function reliableMoveTo(win, targetLeft, targetTop, maxAttempts = 5, intervalMs = 150) {
+    let attempts = 0;
+    const timer = setInterval(() => {
+        // Cancela imediatamente se a janela foi fechada entre ticks.
+        if (!win || win.closed) {
+            clearInterval(timer);
+            return;
+        }
+
+        try { win.moveTo(targetLeft, targetTop); } catch (_) {}
+
+        attempts++;
+
+        // Early exit: verifica se a janela já está na posição correta
+        // dentro de uma tolerância de 32px (cobre variações de DPI,
+        // bordas decorativas do SO e configurações de escala).
+        const tolerance = 32;
+        const arrived = Math.abs(win.screenX - targetLeft) <= tolerance
+                     && Math.abs(win.screenY - targetTop)  <= tolerance;
+
+        if (arrived || attempts >= maxAttempts) {
+            clearInterval(timer);
+        }
+    }, intervalMs);
+}
+
+// ============================================================
 // GERENCIADOR DE ESTADOS DA JANELA FLUTUANTE
 // Controla as transições entre Estado Mic e Estado Ação.
 // ============================================================
@@ -227,6 +274,8 @@ async function transitionToActionState() {
     if (activePipWindow) {
         try {
             const { ACTION_W: W, ACTION_H: H } = CONFIG.UI.WINDOW;
+            // prevX/prevY: posiciona a *janela de ação* onde estava o microfone.
+            // Mantido independente do lastMicPosition — são propósitos distintos.
             const prevX = activePipWindow.screenX;
             const prevY = activePipWindow.screenY;
 
@@ -236,8 +285,10 @@ async function transitionToActionState() {
             activePipWindow.close();
             await new Promise(r => setTimeout(r, 80));
             await openPipWindow(W, H);
-            
-            // NOVO: Governança espacial na recriação da janela
+
+            // [CORREÇÃO] Substitui o moveTo() direto por reliableMoveTo(),
+            // garantindo que o reposicionamento da janela de Ação também
+            // resista à race condition do SO nos ciclos subsequentes.
             reliableMoveTo(activePipWindow, prevX, prevY);
 
             requestAnimationFrame(() => {
@@ -294,6 +345,9 @@ async function transitionToMicState() {
     if (activePipWindow) {
         try {
             const { MIC_W: W, MIC_H: H } = CONFIG.UI.WINDOW;
+
+            // [NOVO] Determina o alvo de retorno usando a memória espacial.
+            // Fallback: posição da janela de ação atual (melhor que nada).
             const targetX = lastMicPosition.x !== null ? lastMicPosition.x : activePipWindow.screenX;
             const targetY = lastMicPosition.y !== null ? lastMicPosition.y : activePipWindow.screenY;
 
@@ -301,10 +355,13 @@ async function transitionToMicState() {
             _pipSessionId++;
             document.body.appendChild(ui.container);
             activePipWindow.close();
-            await new Promise(r => setTimeout(r, 80)); 
+            await new Promise(r => setTimeout(r, 80));
             await openPipWindow(W, H);
 
-            // NOVO: Removemos o antigo setTimeout extra que era frágil e usamos nossa função forte
+            // [CORREÇÃO] Substitui os dois setTimeout(80ms) + moveTo() direto
+            // por reliableMoveTo(). Resolve a race condition que fazia a janela
+            // ignorar o retorno ao canto superior nos ciclos Ação → Mic,
+            // mantendo a consistência de posicionamento ao longo de toda a sessão.
             reliableMoveTo(activePipWindow, targetX, targetY);
 
         } catch (e) {
@@ -753,40 +810,6 @@ function performUndo() {
     }
 }
 
-/**
- * Garante o movimento de uma janela PiP, combatendo a animação de criação do SO.
- * @param {Window} win - Janela alvo
- * @param {number} targetLeft - Posição X
- * @param {number} targetTop - Posição Y
- */
-function reliableMoveTo(win, targetLeft, targetTop) {
-    if (!win) return;
-    let attempts = 0;
-    const maxAttempts = 5;
-    const intervalMs = 120; // Ritmo ideal para bater a animação do Windows/macOS
-
-    const timer = setInterval(() => {
-        // Proteção contra janela fechada durante o processo
-        if (!win || win.closed) {
-            clearInterval(timer);
-            return;
-        }
-
-        // Tenta mover. O catch silencia erros caso a janela seja destruída milissegundos antes.
-        try { win.moveTo(targetLeft, targetTop); } catch (_) {}
-
-        attempts++;
-        
-        // Verifica se chegou ao destino (Tolerância de 32px para bugs de DPI do Chrome)
-        const arrived = Math.abs(win.screenX - targetLeft) <= 32 &&
-                        Math.abs(win.screenY - targetTop) <= 32;
-
-        if (arrived || attempts >= maxAttempts) {
-            clearInterval(timer);
-        }
-    }, intervalMs);
-}
-
 // ========================================================
 // 8. REDIMENSIONAMENTO E ESTADO DA JANELA
 // ========================================================
@@ -929,8 +952,12 @@ window.addEventListener('DOMContentLoaded', () => {
     // e a direção desejada, construindo o handler correto para cada botão.
     //
     // Caminho A (Document PiP, Chrome 116+):
-    //   - moveTo() é chamado após um delay de 80ms para aguardar o SO
-    //     finalizar o posicionamento inicial da janela PiP.
+    //   - reliableMoveTo() é chamado após openPipWindow() para superar
+    //     a race condition da animação nativa do SO, que posiciona a janela
+    //     no canto inferior direito antes de liberar o controle ao JS.
+    //     O loop de tentativas (até 5x a cada 150ms) garante que o comando
+    //     seja executado assim que o Chrome liberar a janela, tanto na
+    //     abertura inicial quanto nos ciclos Ação ↔ Mic subsequentes.
     //   - lastMicPosition é pré-populado ANTES de abrir a janela para que
     //     transitionToMicState() retorne ao canto correto nos ciclos
     //     Ação ↔ Mic subsequentes.
@@ -962,6 +989,9 @@ window.addEventListener('DOMContentLoaded', () => {
         /** CAMINHO A: Document Picture-in-Picture */
         const handlePiP = async () => {
             const { W, H, targetLeft, targetTop } = calcTargetPosition();
+
+            // Pré-popula a âncora de posição para que transitionToMicState()
+            // retorne ao canto correto durante os ciclos Ação ↔ Mic.
             lastMicPosition = { x: targetLeft, y: targetTop };
 
             try {
@@ -970,13 +1000,19 @@ window.addEventListener('DOMContentLoaded', () => {
                 if (ui.pipPlaceholder) ui.pipPlaceholder.style.display = 'flex';
 
                 await openPipWindow(W, H);
-                
-                // NOVO: Chama o reposicionador robusto em vez de delays vazios
+
+                // [CORREÇÃO] Substitui o setTimeout(80ms) + moveTo() direto por
+                // reliableMoveTo(). O Chrome força o PiP ao canto inferior direito
+                // com uma animação do SO. Uma única chamada nesse gap é ignorada.
+                // O loop de tentativas insiste até a janela confirmar a chegada
+                // às coordenadas-alvo, resolvendo o bug do botão Superior.
                 reliableMoveTo(activePipWindow, targetLeft, targetTop);
 
             } catch (err) {
+                // Desfaz as classes caso a abertura falhe.
                 ui.container.classList.remove('minimalist-mode');
                 if (ui.pipPlaceholder) ui.pipPlaceholder.style.display = 'none';
+
                 console.warn('Document PiP bloqueado:', err);
                 ui.statusMsg.textContent = 'Permissão de janela negada pelo navegador.';
                 ui.statusMsg.className   = 'status-bar active status-warning';
