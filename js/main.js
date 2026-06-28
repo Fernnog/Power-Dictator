@@ -27,20 +27,19 @@ const ui = {
     // Área Principal
     textarea: document.getElementById('transcriptionArea'),
     charCount: document.getElementById('charCount'),
-    saveStatus: document.getElementById('saveStatus'),
+    miniVisualizer: document.getElementById('miniVisualizer'),
     statusMsg: document.getElementById('statusMsg'),
     
     // Controles Principais
     micBtn: document.getElementById('micBtn'),
     audioSource: document.getElementById('audioSource'),
-    fileInput: document.getElementById('fileInput'),
     
     // Controle de Motor
     engineToggle: document.getElementById('engineToggle'),
     engineLabel: document.getElementById('engineLabel'),
     
     // Botões de Ação
-    btnUpload: document.querySelector('.btn-upload'),
+    exportBtn: document.getElementById('exportBtn'),
     btnAiFix: document.getElementById('aiFixBtn'),
     btnAiLegal: document.getElementById('aiLegalBtn'),
     btnCopy: document.getElementById('copyBtn'),
@@ -609,11 +608,34 @@ if (ui.engineToggle) {
     });
 }
 
-ui.fileInput.addEventListener('change', () => {
-    executeSafely(() => {
-        alert("Upload de áudio requer backend.");
+if (ui.exportBtn) {
+    ui.exportBtn.addEventListener('click', () => {
+        const text = ui.textarea.value.trim();
+        if (!text) {
+            alert("Não há texto para exportar.");
+            return;
+        }
+        
+        // Animação de feedback no botão
+        ui.exportBtn.classList.add('pulsing');
+        
+        // Geração do arquivo TXT e download automático
+        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        
+        const dateStr = new Date().toISOString().slice(0, 10);
+        a.download = `Ditado_Digital_${dateStr}.txt`;
+        
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        setTimeout(() => ui.exportBtn.classList.remove('pulsing'), 1000);
     });
-});
+}
 
 ui.btnAiFix.addEventListener('click', () => {
     const text = ui.textarea.value.trim();
@@ -880,8 +902,6 @@ function updateCharCount() {
 
 function saveContent() {
     localStorage.setItem(CONFIG.STORAGE_KEYS.TEXT, ui.textarea.value);
-    ui.saveStatus.textContent = "Salvo";
-    setTimeout(() => ui.saveStatus.textContent = "Sincronizado", 2000);
 }
 
 function loadContent() {

@@ -104,7 +104,7 @@ body {
 .container.minimized .header-title,
 .container.minimized .badge-pro,
 .container.minimized .subtitle,
-.container.minimized .btn-upload, 
+.container.minimized .btn-export, 
 .container.minimized .device-selector-container,
 .container.minimized .header-actions { 
     display: none !important;
@@ -541,7 +541,7 @@ textarea {
 }
 
 .btn-mic    { background-color: var(--c-mic); flex: 1.5; }
-.btn-upload { background-color: var(--c-upload); color: white;}
+.btn-export { background-color: var(--c-upload); color: white;}
 .btn-magic  { background-color: var(--c-magic); color: white;}
 .btn-legal  { background-color: var(--c-legal); color: white;}
 .btn-copy   { background-color: var(--c-copy); color: white;}
@@ -685,7 +685,22 @@ textarea {
 
 @keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(5px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
 
-#fileInput { display: none; }
+/* --- Estilos do Mini Visualizador e Botão Exportar --- */
+#miniVisualizer {
+    display: block;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.03);
+    margin-right: auto;
+    margin-left: 15px;
+}
+
+.editor-footer > div {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-grow: 1;
+    justify-content: flex-end;
+}
 
 /* =============================================== */
 /* 8. MODAL & ELEMENTOS GERAIS DE AJUDA            */

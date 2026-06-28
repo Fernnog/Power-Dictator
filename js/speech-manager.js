@@ -341,6 +341,32 @@ export class SpeechManager {
                     if (feedbackTarget) feedbackTarget.classList.remove('audio-detected');
                 }
             }
+
+            // --- Mini Visualizador (Rodapé) ---
+            const miniCanvas = document.getElementById('miniVisualizer');
+            if (miniCanvas) {
+                const miniCtx = miniCanvas.getContext('2d');
+                miniCtx.clearRect(0, 0, miniCanvas.width, miniCanvas.height);
+                
+                miniCtx.beginPath();
+                miniCtx.lineWidth = 1.5;
+                // Verde se o sinal for forte, roxo/indigo se estiver normal
+                miniCtx.strokeStyle = isSignalStrong ? '#10b981' : '#4f46e5'; 
+                
+                const miniCenterY = miniCanvas.height / 2;
+                const miniSliceWidth = miniCanvas.width * 1.0 / bufferLength;
+                let mx = 0;
+                
+                for (let i = 0; i < bufferLength; i++) {
+                    const v = dataArray[i] / 128.0; 
+                    const y = v * miniCenterY;
+                    
+                    if (i === 0) miniCtx.moveTo(mx, y);
+                    else miniCtx.lineTo(mx, y);
+                    mx += miniSliceWidth;
+                }
+                miniCtx.stroke();
+            }
         };
 
         this._drawVisualizer();
