@@ -277,6 +277,11 @@ export class SpeechManager {
         const feedbackTarget = document.querySelector('.editor-area'); 
         const canvasTarget = this.canvas;
 
+        // [NOVO] Cache dos elementos para o loop de alta performance
+        const miniCanvas = document.getElementById('miniVisualizer');
+        const miniCtx = miniCanvas ? miniCanvas.getContext('2d') : null;
+        const appContainer = document.getElementById('appContainer');
+
         // [MODIFICAÇÃO] Expondo o loop na instância e registrando o ID para suportar a transição PiP
         this._drawVisualizer = () => {
             if (!this.isRecording) return;
@@ -343,14 +348,14 @@ export class SpeechManager {
             }
 
             // --- Mini Visualizador (Rodapé) ---
-            const miniCanvas = document.getElementById('miniVisualizer');
-            if (miniCanvas) {
-                const miniCtx = miniCanvas.getContext('2d');
+            // OTIMIZAÇÃO: Usamos as variáveis cacheadas fora do loop.
+            // Checamos a classe no container (DOM Read leve) em vez de consultar em cada frame
+            if (miniCanvas && miniCtx && appContainer && appContainer.classList.contains('focus-mode')) {
+                
                 miniCtx.clearRect(0, 0, miniCanvas.width, miniCanvas.height);
                 
                 miniCtx.beginPath();
                 miniCtx.lineWidth = 1.5;
-                // Verde se o sinal for forte, roxo/indigo se estiver normal
                 miniCtx.strokeStyle = isSignalStrong ? '#10b981' : '#4f46e5'; 
                 
                 const miniCenterY = miniCanvas.height / 2;
@@ -366,6 +371,16 @@ export class SpeechManager {
                     mx += miniSliceWidth;
                 }
                 miniCtx.stroke();
+                
+                if (isSignalStrong) {
+                    miniCanvas.classList.add('audio-detected');
+                } else {
+                    miniCanvas.classList.remove('audio-detected');
+                }
+            } else if (miniCanvas) {
+                // Garante que o canvas seja limpo e as classes resetadas ao sair do modo foco
+                if (miniCtx) miniCtx.clearRect(0, 0, miniCanvas.width, miniCanvas.height);
+                miniCanvas.classList.remove('audio-detected');
             }
         };
 
