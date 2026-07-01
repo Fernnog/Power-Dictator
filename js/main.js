@@ -1,5 +1,5 @@
 import { SpeechManager } from './speech-manager.js';
-import { aiService } from './llm-service.js';
+import { aiService, LEGAL_PROMPT } from './llm-service.js';
 import Glossary from './glossary.js';
 import { CONFIG } from './config.js';
 import { HotkeyManager } from './hotkeys.js';
@@ -462,6 +462,43 @@ const glossaryManager = new Glossary((terms) => {
 // 4. AUXILIARES VISUAIS & SEGURANÇA
 // ========================================================
 
+async function unifiedClipboardCopy(textToCopy, buttonElement) {
+    const targetWindow = ui.textarea.ownerDocument.defaultView;
+    try {
+        await targetWindow.navigator.clipboard.writeText(textToCopy);
+    } catch (primaryError) {
+        // Fallback cross-browser
+        const targetDocument = ui.textarea.ownerDocument;
+        const tempArea = targetDocument.createElement('textarea');
+        tempArea.value = textToCopy;
+        tempArea.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;';
+        targetDocument.body.appendChild(tempArea);
+        tempArea.focus();
+        tempArea.select();
+        try { targetDocument.execCommand('copy'); } catch (fallbackError) {
+            console.warn('[Clipboard] Fallback falhou:', fallbackError);
+        } finally {
+            targetDocument.body.removeChild(tempArea);
+        }
+    }
+
+    // Feedback Visual Padronizado
+    if (buttonElement) {
+        const span = buttonElement.querySelector('span');
+        const originalText = span ? span.textContent : '';
+        if (span) span.textContent = 'Copiado!';
+        
+        // Remove classes antigas mortas (se existirem) e aplica a nova
+        buttonElement.classList.remove('status-success'); 
+        buttonElement.classList.add('copy-success', 'pulsing');
+
+        setTimeout(() => {
+            if (span) span.textContent = originalText;
+            buttonElement.classList.remove('copy-success', 'pulsing');
+        }, 1500); // 1.5s padrão
+    }
+}
+
 const stopVisualEffects = () => {
     [ui.micBtn, ui.btnAiLegal, ui.btnAiFix, ui.btnCopy, ui.btnClear].forEach(btn => {
         if(btn) btn.classList.remove('pulsing');
@@ -670,12 +707,18 @@ ui.btnAiLegal.addEventListener('click', () => {
         updateStatus('processing');
         
         try {
+            // 1. Refina na tela
             const result = await aiService.convertToLegal(text);
             ui.textarea.value = result;
             saveContent();
             updateStatus('');
+            
+            // 2. Concatena o PROMPT GIGANTE + O RESULTADO e copia
+            const finalPayload = `${LEGAL_PROMPT}\n\n[TEXTO A SER REVISADO ABAIXO]\n\n${result}`;
+            await unifiedClipboardCopy(finalPayload, ui.btnAiLegal);
+            
         } catch (error) {
-            alert("Erro na transcrição Jurídica (Groq): " + error.message);
+            alert("Erro na transcrição Jurídica: " + error.message);
             updateStatus('error');
         } finally {
             ui.btnAiLegal.classList.remove('pulsing'); 
@@ -686,54 +729,8 @@ ui.btnAiLegal.addEventListener('click', () => {
 
 ui.btnCopy.addEventListener('click', () => {
     executeSafely(async () => {
-
         stopVisualEffects();
-
-        const textToCopy = ui.textarea.value;
-
-        const targetWindow = ui.textarea.ownerDocument.defaultView;
-
-        try {
-            await targetWindow.navigator.clipboard.writeText(textToCopy);
-        } catch (primaryError) {
-            const targetDocument = ui.textarea.ownerDocument;
-            const tempArea = targetDocument.createElement('textarea');
-
-            tempArea.value = textToCopy;
-            tempArea.style.cssText = [
-                'position:fixed',
-                'top:0',
-                'left:0',
-                'width:1px',
-                'height:1px',
-                'opacity:0',
-                'pointer-events:none',
-            ].join(';');
-
-            targetDocument.body.appendChild(tempArea);
-            tempArea.focus();
-            tempArea.select();
-
-            try {
-                targetDocument.execCommand('copy');
-            } catch (fallbackError) {
-                console.warn('[Clipboard] Fallback também falhou:', fallbackError);
-            } finally {
-                targetDocument.body.removeChild(tempArea);
-            }
-        }
-
-        const span = ui.btnCopy.querySelector('span');
-        const originalText = span ? span.textContent : 'Copiar';
-
-        if (span) span.textContent = 'Copiado!';
-        ui.btnCopy.classList.add('status-success', 'pulsing');
-
-        setTimeout(() => {
-            if (span) span.textContent = originalText;
-            ui.btnCopy.classList.remove('status-success', 'pulsing');
-        }, 1500);
-
+        await unifiedClipboardCopy(ui.textarea.value, ui.btnCopy);
     });
 });
 

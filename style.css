@@ -1328,3 +1328,14 @@ body.is-pip-mode .btn-toggle-size {
     filter: grayscale(0%) opacity(1) brightness(1.05);
     animation: btnPulse 1.2s ease-in-out infinite;
 }
+
+/* =============================================== */
+/* 15. ESTADOS DE SUCESSO UNIFICADOS               */
+/* =============================================== */
+.btn-action.copy-success {
+    background-color: #10b981 !important; /* Emerald */
+    color: white !important;
+    border-color: #10b981 !important;
+    transform: scale(1.02);
+    transition: all 0.2s ease-out;
+}
