@@ -1,5 +1,5 @@
 import { SpeechManager } from './speech-manager.js';
-import { aiService, LEGAL_PROMPT } from './llm-service.js';
+import { aiService, EXTERNAL_LEGAL_PROMPT } from './llm-service.js';
 import Glossary from './glossary.js';
 import { CONFIG } from './config.js';
 import { HotkeyManager } from './hotkeys.js';
@@ -704,21 +704,24 @@ ui.btnAiLegal.addEventListener('click', () => {
     executeSafely(async () => {
         stopVisualEffects();
         ui.btnAiLegal.classList.add('pulsing'); 
-        updateStatus('processing');
+        
+        // Novo status refletindo a nova função
+        ui.statusMsg.textContent = "PREPARANDO DIRETRIZ...";
+        ui.statusMsg.classList.add('active', 'status-ai');
         
         try {
-            // 1. Refina na tela
+            // 1. A IA interna limpa a gagueira/gramática das diretrizes ditadas
             const result = await aiService.convertToLegal(text);
             ui.textarea.value = result;
             saveContent();
             updateStatus('');
             
-            // 2. Concatena o PROMPT GIGANTE + O RESULTADO e copia
-            const finalPayload = `${LEGAL_PROMPT}\n\n[TEXTO A SER REVISADO ABAIXO]\n\n${result}`;
+            // 2. Concatena o PROMPT EXTERNO (ordem) + DIRETRIZES LIMPAS
+            const finalPayload = `${EXTERNAL_LEGAL_PROMPT}\n\n[MINHAS DIRETRIZES E CONTEXTO]\n\n${result}`;
             await unifiedClipboardCopy(finalPayload, ui.btnAiLegal);
             
         } catch (error) {
-            alert("Erro na transcrição Jurídica: " + error.message);
+            alert("Erro ao preparar diretriz: " + error.message);
             updateStatus('error');
         } finally {
             ui.btnAiLegal.classList.remove('pulsing'); 
