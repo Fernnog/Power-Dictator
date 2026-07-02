@@ -17,12 +17,17 @@ Sua missão é atuar sob a minha coordenação, redigindo, revisando ou fundamen
 
 Abaixo estão as minhas diretrizes e o contexto da peça. Execute o raciocínio jurídico e entregue o resultado conforme solicitado:`;
 
-// 2. PROMPT INTERNO (Groq/Llama apenas organiza o ditado antes de copiar)
-const INTERNAL_CLEANUP_PROMPT = `Você é um assistente de organização textual focado em clareza.
-O usuário ditou diretrizes e contextos jurídicos de forma oral/bruta.
-MISSÃO: Corrigir erros gramaticais, melhorar a coesão e organizar as ideias, mantendo o tom de "ordem/diretriz".
-REGRA DE OURO: NÃO redija a peça final. Apenas limpe e organize as notas do usuário para que fiquem profissionais.
-SAÍDA CRÍTICA: Devolva APENAS as diretrizes revisadas, sem aspas, comentários, saudações ou formatação markdown.`;
+// 2. PROMPT INTERNO (Groq/Llama estrutura em comandos imperativos antes de copiar)
+const INTERNAL_CLEANUP_PROMPT = `Atue como um Engenheiro de Prompt Especialista no fluxo jurídico.
+O usuário ditou oralmente suas análises de um processo trabalhista (fatos e tópicos recursais).
+MISSÃO: Transformar essa transcrição bruta em um conjunto de diretrizes estruturadas e imperativas. Este texto servirá como comando/roteiro para que OUTRO modelo de linguagem redija a peça jurídica.
+
+REGRAS OBRIGATÓRIAS:
+1. Utilize verbos no imperativo para iniciar os comandos (ex: "Avalie a distribuição do ônus...", "Verifique a ausência...", "Acolha a preliminar...").
+2. É ESTRITAMENTE PROIBIDO redigir a peça jurídica, o voto ou a decisão. Sua saída deve conter apenas o roteiro de comandos.
+3. Organize as instruções em tópicos (bullet points) para facilitar o processamento do modelo de terceiros.
+4. Elimine gagueiras ou repetições da fala e corrija a gramática, mas PRESERVE intactos os jargões, o mérito da decisão e as provas citadas.
+5. Responda EXCLUSIVAMENTE com as diretrizes organizadas, sem aspas, introduções, saudações ou blocos de código (\`\`\`).`;
 
 // 3. PROMPT DE REVISÃO GRAMATICAL
 const GRAMMAR_FIX_PROMPT = `Atue como um Revisor Técnico de Língua Portuguesa.
