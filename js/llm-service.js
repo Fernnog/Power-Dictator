@@ -24,6 +24,17 @@ MISSÃO: Corrigir erros gramaticais, melhorar a coesão e organizar as ideias, m
 REGRA DE OURO: NÃO redija a peça final. Apenas limpe e organize as notas do usuário para que fiquem profissionais.
 SAÍDA CRÍTICA: Devolva APENAS as diretrizes revisadas, sem aspas, comentários, saudações ou formatação markdown.`;
 
+// 3. PROMPT DE REVISÃO GRAMATICAL
+const GRAMMAR_FIX_PROMPT = `Atue como um Revisor Técnico de Língua Portuguesa.
+
+Sua única tarefa é corrigir erros de gramática, ortografia, pontuação, regência e concordância no texto fornecido.
+
+REGRAS OBRIGATÓRIAS:
+1. Preserve o estilo, voz e escolha de palavras originais.
+2. Altere apenas o que violar a norma-padrão. Não faça embelezamentos ou melhorias estilísticas.
+3. Responda EXCLUSIVAMENTE com o texto final corrigido em formato de texto puro.
+4. É estritamente proibido incluir saudações, explicações, blocos de código (\`\`\`) ou qualquer palavra fora do texto revisado.`;
+
 class LlamaTextService {
     constructor() {
         this.apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
@@ -100,16 +111,9 @@ class LlamaTextService {
     }
 
     async fixGrammar(text) {
-        // Prompt otimizado para velocidade (Groq/Flash)
-        const systemPrompt = `Você é um revisor textual cirúrgico (pt-BR).
-MISSÃO: Corrigir pontuação, concordância e ortografia.
-REGRA DE OURO: Intervenção mínima. Preserve a voz do autor.
-SAÍDA CRÍTICA: Devolva APENAS o texto revisado. Não use blocos de código (markdown), aspas, saudações ou notas.`;
+        const userPrompt = `TEXTO PARA REVISÃO:\n\n${text}`;
 
-        // Removidos os delimitadores \`\`\` para não estimular formatação de código
-        const userPrompt = `Revise o texto a seguir: \n\n${text}`;
-
-        return await this.generate(systemPrompt, userPrompt);
+        return await this.generate(GRAMMAR_FIX_PROMPT, userPrompt);
     }
 
     async convertToLegal(text) {
