@@ -17,8 +17,8 @@ Sua missão é atuar sob a minha coordenação, redigindo, revisando ou fundamen
 
 Abaixo estão as minhas diretrizes e o contexto da peça. Execute o raciocínio jurídico e entregue o resultado conforme solicitado:`;
 
-// 2. PROMPT INTERNO (Groq/Llama estrutura em comandos imperativos antes de copiar)
-const INTERNAL_CLEANUP_PROMPT = `Atue como um Engenheiro de Prompt Especialista no fluxo jurídico.
+// [BACKUP DE SEGURANÇA] Mantido para rollback rápido via GitHub
+const LEGACY_INTERNAL_CLEANUP_PROMPT = `Atue como um Engenheiro de Prompt Especialista no fluxo jurídico.
 O usuário ditou oralmente suas análises de um processo trabalhista (fatos e tópicos recursais).
 MISSÃO: Transformar essa transcrição bruta em um conjunto de diretrizes estruturadas e imperativas. Este texto servirá como comando/roteiro para que OUTRO modelo de linguagem redija a peça jurídica.
 
@@ -28,6 +28,23 @@ REGRAS OBRIGATÓRIAS:
 3. Organize as instruções em tópicos (bullet points) para facilitar o processamento do modelo de terceiros.
 4. Elimine gagueiras ou repetições da fala e corrija a gramática, mas PRESERVE intactos os jargões, o mérito da decisão e as provas citadas.
 5. Responda EXCLUSIVAMENTE com as diretrizes organizadas, sem aspas, introduções, saudações ou blocos de código (\`\`\`).`;
+
+// 2. NOVO PROMPT INTERNO (Groq/Llama) - Foco em Dual-Comportamento
+const INTERNAL_CLEANUP_PROMPT = `Atue como um Assistente de Revisão Jurídica Inteligente.
+O usuário ditou anotações sobre um processo judicial. Estas anotações assumirão um de dois cenários:
+CENÁRIO A (Diretrizes): Instruções de como outra IA deve redigir a peça (ex: "durante a fundamentação da minuta, destaque que...").
+CENÁRIO B (Texto Exato): O raciocínio direto ou trecho que já deve compor a peça.
+
+SUA MISSÃO: Processar a transcrição corrigindo erros de captação de voz, gagueiras e falhas de concordância, preservando ao máximo as palavras originais e o fluxo do pensamento.
+
+REGRAS OBRIGATÓRIAS:
+1. ABORDAGEM SUAVE: O estilo, o tom e as palavras do autor devem ser rigorosamente mantidos.
+2. ESTRUTURA ORIGINAL: É ESTRITAMENTE PROIBIDO transformar o texto em listas (bullet points) ou forçar verbos no imperativo (ex: "Avalie", "Faça"), a menos que o usuário tenha falado exatamente dessa forma.
+3. ADAPTAÇÃO AO CENÁRIO:
+   - Se identificar o CENÁRIO A (ou se o usuário usar a flag [MODO_DIRETRIZ]), apenas limpe o texto para que a instrução fique cristalina para a próxima IA.
+   - Se identificar o CENÁRIO B, apenas conecte as frases e corrija a gramática levemente.
+4. INTEGRIDADE DOS DADOS: Preserve intactos todos os jargões jurídicos, citações, valores, nomes e referências processuais.
+5. SAÍDA RESTRITA: Responda EXCLUSIVAMENTE com o texto revisado, sem adicionar introduções, aspas ou blocos de código (\`\`\`).`;
 
 // 3. PROMPT DE REVISÃO GRAMATICAL
 const GRAMMAR_FIX_PROMPT = `Atue como um Revisor Técnico de Língua Portuguesa.
@@ -122,8 +139,16 @@ class LlamaTextService {
     }
 
     async convertToLegal(text) {
-        // Usa o prompt interno apenas para limpar o ditado do usuário
-        const userPrompt = `Organize e corrija o seguinte ditado/diretriz:\n\n${text}`;
+        // 1. Rede de Segurança Determinística: Analisa o texto em busca de âncoras vocais do usuário
+        const lowerText = text.toLowerCase();
+        const isExplicitGuideline = /durante a fundamenta|na minuta|diretriz|ordem para/i.test(lowerText);
+        
+        // Injeção de flag de contexto baseada na intenção detectada
+        const contextFlag = isExplicitGuideline ? "\n[SISTEMA: O TEXTO ABAIXO FOI CLASSIFICADO COMO CENÁRIO A (DIRETRIZ)]\n" : "";
+
+        // 2. Neutralização do User Prompt (remoção de verbos de comando para evitar viés de sobreposição)
+        const userPrompt = `${contextFlag}TEXTO DITADO:\n\n${text}`;
+
         return await this.generate(INTERNAL_CLEANUP_PROMPT, userPrompt);
     }
 }
