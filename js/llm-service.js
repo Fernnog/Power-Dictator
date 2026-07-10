@@ -119,10 +119,13 @@ class GroqLlmService {
             let content = data.choices[0].message.content.trim();
 
             // [NOVO] PIPELINE DE SANITIZAÇÃO ESTRUTURAL
-            // 1. Limpa aspas indesejadas (legado mantido)
+            // 1. Remove cadeia de pensamentos (Chain of Thought) de modelos reasoning (ex: Qwen)
+            content = content.replace(/<think>[\s\S]*?<\/think>\s*/gi, '').trim();
+
+            // 2. Limpa aspas indesejadas (legado mantido)
             content = content.replace(/^"|"$/g, '').trim();
             
-            // 2. Extrai texto de dentro de blocos Markdown (```), descartando o lixo ao redor
+            // 3. Extrai texto de dentro de blocos Markdown (```), descartando o lixo ao redor
             content = content.replace(/^```[\w]*\r?\n?([\s\S]*?)\r?\n?```[\s\S]*$/i, '$1').trim();
 
             return content;
