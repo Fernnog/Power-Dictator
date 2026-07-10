@@ -4,6 +4,8 @@
  * Finalidade: Processamento de texto via LLM com saída estrita.
  */
 
+import { CONFIG } from './config.js';
+
 // 1. PROMPT EXTERNO (Vai para a Área de Transferência para o ChatGPT/Claude)
 export const EXTERNAL_LEGAL_PROMPT = `# PERSONA
 Assuma a persona de um Assessor Jurídico Trabalhista Sênior e Revisor de Peças.
@@ -57,13 +59,10 @@ REGRAS OBRIGATÓRIAS:
 3. Responda EXCLUSIVAMENTE com o texto final corrigido em formato de texto puro.
 4. É estritamente proibido incluir saudações, explicações, blocos de código (\`\`\`) ou qualquer palavra fora do texto revisado.`;
 
-class LlamaTextService {
+class GroqLlmService {
     constructor() {
         this.apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
         this.storageKey = 'dd_groq_token'; 
-        
-        // CORREÇÃO: Utilizando o modelo mais robusto e obediente a instruções restritas
-        this.model = 'llama-3.3-70b-versatile'; 
     }
 
     getToken() {
@@ -83,13 +82,15 @@ class LlamaTextService {
         const token = this.getToken();
         
         const payload = {
-            model: this.model,
+            model: CONFIG.LLM.MODEL_ID,
             messages: [
                 { role: "system", content: systemPrompt },
                 { role: "user", content: userText }
             ],
-            temperature: 0.0, // CORREÇÃO: Temperatura ZERO para bloquear qualquer criatividade/alucinação
-            max_tokens: 2048,
+            temperature: CONFIG.LLM.TEMPERATURE,
+            max_completion_tokens: CONFIG.LLM.MAX_COMPLETION_TOKENS,
+            top_p: CONFIG.LLM.TOP_P,
+            reasoning_effort: CONFIG.LLM.REASONING_EFFORT,
             stream: false
         };
 
@@ -153,4 +154,4 @@ class LlamaTextService {
     }
 }
 
-export const aiService = new LlamaTextService();
+export const aiService = new GroqLlmService();
