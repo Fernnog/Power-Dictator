@@ -40,10 +40,10 @@ export const CONFIG = {
         }
     },
     LLM: {
-        MODEL_ID: "qwen/qwen3.6-27b",
-        MAX_COMPLETION_TOKENS: 4096,
+        MODEL_ID: "openai/gpt-oss-20b",
+        MAX_COMPLETION_TOKENS: 8192,
         TEMPERATURE: 0.0,
-        TOP_P: 0.95,
-        REASONING_EFFORT: "default"
+        TOP_P: 1,
+        REASONING_EFFORT: "medium"
     }
 };
