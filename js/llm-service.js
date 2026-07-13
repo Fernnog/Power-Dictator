@@ -81,6 +81,7 @@ class GroqLlmService {
     async generate(systemPrompt, userText) {
         const token = this.getToken();
         
+        // [REFATORADO] Contrato de Dados (Payload) estrito e sanitizado.
         const payload = {
             model: CONFIG.LLM.MODEL_ID,
             messages: [
@@ -88,9 +89,8 @@ class GroqLlmService {
                 { role: "user", content: userText }
             ],
             temperature: CONFIG.LLM.TEMPERATURE,
-            max_completion_tokens: CONFIG.LLM.MAX_COMPLETION_TOKENS,
+            max_tokens: CONFIG.LLM.MAX_TOKENS, // Utilizando a chave correta da API
             top_p: CONFIG.LLM.TOP_P,
-            reasoning_effort: CONFIG.LLM.REASONING_EFFORT,
             stream: false
         };
 

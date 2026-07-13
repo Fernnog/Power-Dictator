@@ -40,10 +40,15 @@ export const CONFIG = {
         }
     },
     LLM: {
-        MODEL_ID: "openai/gpt-oss-20b",
-        MAX_COMPLETION_TOKENS: 8192,
+        // Modelo intermediário (Qwen 32B). Mantém alta capacidade analítica para peças 
+        // jurídicas sem esbarrar no consumo excessivo de tokens de um modelo 70B.
+        MODEL_ID: "qwen-2.5-32b", 
+        
+        // [REFATORADO] Renomeado de MAX_COMPLETION_TOKENS para o padrão correto.
+        // Reduzido para 4096 para garantir que (Input + Output) fique < 8000 TPM.
+        MAX_TOKENS: 4096, 
+        
         TEMPERATURE: 0.0,
-        TOP_P: 1,
-        REASONING_EFFORT: "medium"
+        TOP_P: 1
     }
 };
