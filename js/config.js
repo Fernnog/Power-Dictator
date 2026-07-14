@@ -40,15 +40,13 @@ export const CONFIG = {
         }
     },
     LLM: {
-        // Modelo intermediário (Qwen 32B). Mantém alta capacidade analítica para peças 
-        // jurídicas sem esbarrar no consumo excessivo de tokens de um modelo 70B.
-        MODEL_ID: "qwen-2.5-32b", 
+        // Modelo de Raciocínio (Reasoning) da família Qwen na Groq
+        MODEL_ID: "qwen/qwen3.6-27b", 
         
-        // [REFATORADO] Renomeado de MAX_COMPLETION_TOKENS para o padrão correto.
-        // Reduzido para 4096 para garantir que (Input + Output) fique < 8000 TPM.
-        MAX_TOKENS: 4096, 
-        
-        TEMPERATURE: 0.0,
-        TOP_P: 1
+        // Parâmetros de infraestrutura ajustados conforme documentação oficial Groq
+        MAX_COMPLETION_TOKENS: 4096, // Mantido em 4096 para proteção contra Rate Limit
+        TEMPERATURE: 0.6,            // Tolerância a variação ajustada para 0.6
+        TOP_P: 0.95,                 // Top-P exigido pelo endpoint
+        REASONING_EFFORT: "default"  // Chave obrigatória para o modelo 3.6-27b
     }
 };
