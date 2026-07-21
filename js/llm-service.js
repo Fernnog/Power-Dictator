@@ -1,6 +1,6 @@
 /**
  * LlamaTextService - Arquiteto de Produto Front-end
- * Versão: 1.2.0 (Refatoração de Prompt Delegador)
+ * Versão: 1.2.1 (Hotfix: Sanitização Blindada de Raciocínio / Chain of Thought)
  * Finalidade: Processamento de texto via LLM com saída estrita.
  */
 
@@ -31,7 +31,7 @@ REGRAS OBRIGATÓRIAS:
 4. Elimine gagueiras ou repetições da fala e corrija a gramática, mas PRESERVE intactos os jargões, o mérito da decisão e as provas citadas.
 5. Responda EXCLUSIVAMENTE com as diretrizes organizadas, sem aspas, introduções, saudações ou blocos de código (\`\`\`).`;
 
-// 2. NOVO PROMPT INTERNO (Groq/Llama) - Foco em Dual-Comportamento
+// 2. NOVO PROMPT INTERNO (Groq/Llama/Reasoning) - Foco em Dual-Comportamento e Contenção CoT
 const INTERNAL_CLEANUP_PROMPT = `Atue como um Assistente de Revisão Jurídica Inteligente.
 O usuário ditou anotações sobre um processo judicial. Estas anotações assumirão um de dois cenários:
 CENÁRIO A (Diretrizes): Instruções de como outra IA deve redigir a peça (ex: "durante a fundamentação da minuta, destaque que...").
@@ -46,7 +46,7 @@ REGRAS OBRIGATÓRIAS:
    - Se identificar o CENÁRIO A (ou se o usuário usar a flag [MODO_DIRETRIZ]), apenas limpe o texto para que a instrução fique cristalina para a próxima IA.
    - Se identificar o CENÁRIO B, apenas conecte as frases e corrija a gramática levemente.
 4. INTEGRIDADE DOS DADOS: Preserve intactos todos os jargões jurídicos, citações, valores, nomes e referências processuais.
-5. SAÍDA RESTRITA: Responda EXCLUSIVAMENTE com o texto revisado, sem adicionar introduções, aspas ou blocos de código (\`\`\`).`;
+5. SAÍDA RESTRITA: Responda EXCLUSIVAMENTE com o texto revisado. Se o seu modelo exigir uma etapa de raciocínio prévio, este raciocínio DEVE estar estritamente contido dentro de tags <think> e </think>. O texto final útil deve vir fora e logo após essas tags. Nenhuma saudação ou aspas devem ser incluídas.`;
 
 // 3. PROMPT DE REVISÃO GRAMATICAL
 const GRAMMAR_FIX_PROMPT = `Atue como um Revisor Técnico de Língua Portuguesa.
@@ -57,7 +57,7 @@ REGRAS OBRIGATÓRIAS:
 1. Preserve o estilo, voz e escolha de palavras originais.
 2. Altere apenas o que violar a norma-padrão. Não faça embelezamentos ou melhorias estilísticas.
 3. Responda EXCLUSIVAMENTE com o texto final corrigido em formato de texto puro.
-4. É estritamente proibido incluir saudações, explicações, blocos de código (\`\`\`) ou qualquer palavra fora do texto revisado.`;
+4. É estritamente proibido incluir saudações, explicações, blocos de código (\`\`\`) ou qualquer palavra fora do texto revisado. Se o seu modelo exigir uma etapa de raciocínio prévio, este raciocínio DEVE estar estritamente contido dentro de tags <think> e </think>.`;
 
 class GroqLlmService {
     constructor() {
@@ -117,17 +117,26 @@ class GroqLlmService {
             }
 
             const data = await response.json();
-            let content = data.choices[0].message.content.trim();
+            
+            // Garante que não quebre caso a API mude a estrutura sutilmente
+            let content = data.choices[0].message.content || "";
 
-            // [NOVO] PIPELINE DE SANITIZAÇÃO ESTRUTURAL
-            // 1. Remove cadeia de pensamentos (Chain of Thought) de modelos reasoning (ex: Qwen)
-            content = content.replace(/<think>[\s\S]*?<\/think>\s*/gi, '').trim();
+            // [NOVO] PIPELINE DE SANITIZAÇÃO ESTRUTURAL BLINDADO
+            
+            // 1. Remove cadeia de pensamentos (Chain of Thought), cobrindo falha no fechamento (</think>)
+            content = content.replace(/<think>[\s\S]*?(?:<\/think>|$)\s*/gi, '').trim();
 
-            // 2. Limpa aspas indesejadas (legado mantido)
+            // 2. Rede de Segurança Extrema: Se sobrar uma tag de fechamento perdida no meio do texto
+            if (content.includes('</think>')) {
+                content = content.split('</think>').pop().trim();
+            }
+
+            // 3. Limpa aspas indesejadas (legado mantido)
             content = content.replace(/^"|"$/g, '').trim();
             
-            // 3. Extrai texto de dentro de blocos Markdown (```), descartando o lixo ao redor
-            content = content.replace(/^```[\w]*\r?\n?([\s\S]*?)\r?\n?```[\s\S]*$/i, '$1').trim();
+            // 4. Extrai texto de dentro de blocos Markdown (```), descartando o lixo ao redor.
+            // Aprimorado para aceitar rótulos ocultos como ```markdown ou ```text
+            content = content.replace(/^```(?:markdown|text)?\r?\n?([\s\S]*?)\r?\n?```[\s\S]*$/i, '$1').trim();
 
             return content;
 
