@@ -3,6 +3,7 @@ import { aiService, EXTERNAL_LEGAL_PROMPT } from './llm-service.js';
 import Glossary from './glossary.js';
 import { CONFIG } from './config.js';
 import { HotkeyManager } from './hotkeys.js';
+import { HistoryManager } from './history.js';
 
 // Referência à janela flutuante (somente para o caminho window.open/fallback)
 let activeExternalWindow = null;
@@ -49,6 +50,12 @@ const ui = {
     container: document.getElementById('appContainer'),
     helpBtn: document.getElementById('helpBtn'),
     toastContainer: document.getElementById('toastContainer'),
+
+    // Histórico
+    historyBtn: document.getElementById('historyBtn'),
+    historyModal: document.getElementById('historyModal'),
+    closeHistoryBtn: document.getElementById('closeHistoryBtn'),
+    historyList: document.getElementById('historyList'),
 
     // Glossário
     glossaryBtn: document.getElementById('glossaryBtn'),
@@ -458,6 +465,27 @@ const glossaryManager = new Glossary((terms) => {
 });
 
 // ========================================================
+// 3.5. HISTÓRICO (Instanciação do Módulo)
+// ========================================================
+const historyManager = new HistoryManager(ui.historyList, (restoredText) => {
+    // Callback executado ao clicar em um item do histórico
+    ui.textarea.value = restoredText;
+    saveContent(); 
+    updateCharCount();
+    
+    if (ui.container.classList.contains('minimized')) {
+        ui.textarea.scrollTop = ui.textarea.scrollHeight;
+    }
+    
+    ui.historyModal.style.display = 'none';
+    
+    // Feedback visual integrado ao ecossistema existente
+    ui.statusMsg.textContent = "TEXTO RESTAURADO";
+    ui.statusMsg.className = 'status-bar active status-success';
+    setTimeout(() => ui.statusMsg.className = 'status-bar', 2500);
+});
+
+// ========================================================
 // 4. AUXILIARES VISUAIS & SEGURANÇA
 // ========================================================
 
@@ -480,6 +508,9 @@ async function unifiedClipboardCopy(textToCopy, buttonElement) {
             targetDocument.body.removeChild(tempArea);
         }
     }
+    
+    // [NOVO GATILHO] Salva backup seguro ao copiar um texto finalizado
+    historyManager.saveSnapshot(textToCopy);
 
     // Feedback Visual Padronizado
     if (buttonElement) {
@@ -777,8 +808,30 @@ if (supportsHover) {
 
 ui.btnClear.addEventListener('click', () => executeSafely(() => handleClearAction()));
 
+// Eventos do Modal de Histórico
+if (ui.historyBtn && ui.historyModal) {
+    ui.historyBtn.addEventListener('click', () => {
+        // Tenta salvar o texto atual antes de abrir o histórico (segurança extra)
+        historyManager.saveSnapshot(ui.textarea.value);
+        historyManager.render();
+        ui.historyModal.style.display = 'flex';
+    });
+    ui.closeHistoryBtn.addEventListener('click', () => ui.historyModal.style.display = 'none');
+}
+
+// [NOVO GATILHO] Salva estado se o usuário fechar a aba ou mudar de app
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && ui.textarea.value) {
+        historyManager.saveSnapshot(ui.textarea.value);
+    }
+});
+
 function handleClearAction() {
     if (!ui.textarea.value) return;
+    
+    // [NOVO GATILHO] Salva antes de excluir o texto da tela
+    historyManager.saveSnapshot(ui.textarea.value);
+    
     tempDeletedText = ui.textarea.value;
     ui.textarea.value = '';
     saveContent();

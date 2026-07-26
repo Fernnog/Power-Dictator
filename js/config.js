@@ -4,7 +4,8 @@ export const CONFIG = {
         MIC: 'ditado_pref_mic',
         GLOSSARY: 'dd_glossary',
         HF_TOKEN: 'dd_hf_token',
-        ENGINE: 'dd_engine_pref'
+        ENGINE: 'dd_engine_pref',
+        HISTORY: 'dd_transcription_history'
     },
     AUDIO: {
         HIGHPASS_FREQ: 85,
