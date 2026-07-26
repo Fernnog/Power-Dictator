@@ -46,7 +46,6 @@ const ui = {
     btnClear: document.getElementById('clearBtn'),
     
     // Modais e Auxiliares
-    toggleSizeBtn: document.getElementById('toggleSizeBtn'),
     container: document.getElementById('appContainer'),
     helpBtn: document.getElementById('helpBtn'),
     toastContainer: document.getElementById('toastContainer'),
@@ -574,9 +573,19 @@ const updateStatus = (status) => {
         stopVisualEffects(); 
         toggleWakeLock(false);
     } else {
+        // Estado IDLE (Inativo/Finalizado)
         ui.statusMsg.textContent = "";
         ui.statusMsg.classList.remove('active');
         ui.micBtn.classList.remove('recording', 'pulsing'); 
+        
+        // [NOVA IMPLEMENTAÇÃO] Cópia Inteligente.
+        // Utilizamos setTimeout para garantir que o DOM já atualizou o value do textarea.
+        const currentText = ui.textarea.value.trim();
+        if (currentText.length > 0) {
+            setTimeout(() => {
+                unifiedClipboardCopy(currentText, ui.micBtn);
+            }, 150);
+        }
     }
 };
 
@@ -687,6 +696,9 @@ ui.btnAiFix.addEventListener('click', () => {
             ui.textarea.value = result;
             saveContent();
             updateStatus('');
+            
+            // [NOVA IMPLEMENTAÇÃO] Cópia garantida após processamento do texto
+            await unifiedClipboardCopy(result, ui.btnAiFix);
         } catch (error) {
             alert("Erro na IA (Llama/Groq): " + error.message);
             updateStatus('error');
@@ -842,15 +854,7 @@ function setUIMode(isMinimized) {
         ui.container.classList.remove('minimized');
     }
 
-    const iconMinimize = ui.container.querySelector('#iconMinimize');
-    const iconMaximize = ui.container.querySelector('#iconMaximize');
-
-    if (iconMinimize) {
-        iconMinimize.classList.toggle('icon-hidden', isMinimized);
-    }
-    if (iconMaximize) {
-        iconMaximize.classList.toggle('icon-hidden', !isMinimized);
-    }
+    // Removida a lógica de iconMinimize e iconMaximize que causariam erro no DOM
 
     const isPip = !!window.documentPictureInPicture?.window;
     const isOwnPopup = (activeExternalWindow === window);
@@ -876,22 +880,9 @@ function setUIMode(isMinimized) {
     }
     
     if (isMinimized) {
-        setTimeout(() => {
-            ui.textarea.scrollTop = ui.textarea.scrollHeight;
-        }, 100);
+        setTimeout(() => ui.textarea.scrollTop = ui.textarea.scrollHeight, 100);
     }
 }
-
-ui.toggleSizeBtn.addEventListener('click', () => {
-    const pipWindow = window.documentPictureInPicture?.window;
-    if (pipWindow && ui.toggleSizeBtn.ownerDocument === pipWindow.document) {
-        pipWindow.close();
-        return;
-    }
-
-    const isCurrentlyMinimized = ui.container.classList.contains('minimized');
-    setUIMode(!isCurrentlyMinimized);
-});
 
 // ========================================================
 // 9. STARTUP
@@ -1033,7 +1024,8 @@ window.addEventListener('DOMContentLoaded', () => {
     if (urlParams.get('mode') === 'compact') {
         setTimeout(() => {
             if (!ui.container.classList.contains('minimized')) {
-                ui.toggleSizeBtn.click();
+                // Aciona a função de estado diretamente, evitando evento em DOM null
+                setUIMode(true);
             }
         }, 100);
     }

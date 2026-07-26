@@ -183,17 +183,7 @@ body {
     overflow: hidden;
 }
 
-/* Reposiciona o botão de toggle para o topo flutuante */
-.container.minimized .btn-toggle-size {
-    position: absolute;
-    top: 5px;
-    right: 5px;
-    background: rgba(255, 255, 255, 0.9);
-    z-index: 50;
-    padding: 4px;
-    border: 1px solid var(--border);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-}
+/* Regra .container.minimized .btn-toggle-size removida */
 
 /* =============================================== */
 /* 3. HEADER & VISUALIZER                          */
@@ -293,19 +283,7 @@ canvas#audioVisualizer {
     height: 100%;
 }
 
-.btn-toggle-size {
-    position: absolute;
-    top: 1rem;
-    right: 1rem;
-    background: transparent;
-    border: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    padding: 8px;
-    border-radius: 50%;
-    z-index: 10;
-}
-.btn-toggle-size:hover { background: #f3f4f6; color: var(--text-main); }
+/* Classes do .btn-toggle-size removidas */
 
 /* =============================================== */
 /* 4. ÁREA DE TEXTO (EDITOR)                       */
@@ -1015,10 +993,7 @@ kbd {
     display: none;
     position: absolute;
     top: 1rem;
-    /* right: distância calculada para deixar 4px de gap em relação
-       ao btn-toggle-size (right:1rem + ~36px de largura = 52px de borda esquerda).
-       right: 3.5rem = 56px → 56 - 52 = 4px de gap. */
-    right: 3.5rem;
+    right: 1rem;
     align-items: center;
     gap: 4px;
     z-index: 10;
@@ -1075,10 +1050,7 @@ kbd {
         box-shadow: none !important;
     }
 
-    /* O botão de alternar tamanho não faz sentido em mobile */
-    .btn-toggle-size {
-        display: none !important;
-    }
+    /* Reset residual removido */
 }
 
 /* -----------------------------------------------  */
@@ -1129,16 +1101,7 @@ body.is-pip-mode .container {
 
 /* Garante que apenas o botão de destacar fique oculto dentro do PiP (Atualizado acima) */
 
-/* ============================================================
-   MODO PICTURE-IN-PICTURE: Botão de Retorno Visível
-   Garante que o botão de restaurar a janela seja visível
-   e utilizável quando o app está no modo destacado.
-   ============================================================ */
-body.is-pip-mode .btn-toggle-size {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
+/* Bloco do .btn-toggle-size no is-pip-mode removido */
 
 /* ============================================================
    WIDGET MINIMIZADO: Pílula de Status Flutuante

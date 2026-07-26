@@ -35,7 +35,7 @@
         opacity: 0;
     "></div>
 
-    <div id="appContainer" class="container">
+    <div id="appContainer" class="container focus-mode">
         <!-- [INSERIR] Novo botão Pop-out — ícone minimalista, sem texto -->
         <div class="popout-actions">
             <button id="popOutBottomBtn" class="btn-popout-icon" title="Modo Compacto Inferior">
@@ -47,10 +47,7 @@
             </button>
         </div>
         
-        <button id="toggleSizeBtn" class="btn-toggle-size" title="Alternar Modo Compacto">
-            <svg id="iconMinimize" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>
-            <svg id="iconMaximize" style="display:none;" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
-        </button>
+        <!-- Botão de alternar tamanho removido (layout padrão é o focus-mode) -->
 
         <header class="app-header">
             <div class="header-title">

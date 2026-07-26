@@ -33,15 +33,6 @@ export class HotkeyManager {
                     e.preventDefault();
                     this.actions.triggerUndo();
                     break;
-
-                // [NOVO v1.0.6] Alternar Modo Widget/Janela
-                case CONFIG.SHORTCUTS.TOGGLE_MODE:
-                    e.preventDefault();
-                    // Simula o clique físico para aproveitar a lógica de redimensionamento do main.js
-                    if (this.ui.toggleSizeBtn) {
-                        this.ui.toggleSizeBtn.click();
-                    }
-                    break;
             }
         });
     }

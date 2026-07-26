@@ -25,8 +25,7 @@ export const CONFIG = {
         REC: 'KeyG',
         CLEAR: 'KeyL',
         COPY: 'KeyC',
-        UNDO: 'KeyZ',
-        TOGGLE_MODE: 'KeyM'
+        UNDO: 'KeyZ'
     },
     UI: {
         TOAST_DURATION: 5000,
